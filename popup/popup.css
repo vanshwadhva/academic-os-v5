@@ -1,0 +1,120 @@
+* { box-sizing: border-box; }
+
+body {
+  width: 300px;
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: #1a1a1a;
+  background: #ffffff;
+}
+
+.wrap { padding: 16px; }
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.brand { font-weight: 700; font-size: 15px; }
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #d0d0d0;
+}
+.status-dot.online { background: #2ecc71; }
+.status-dot.offline { background: #e74c3c; }
+
+.lumen-status {
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #f7f7f8;
+}
+.lumen-status.connected {
+  background: #e8f8ef;
+  color: #1a7a42;
+}
+
+.hidden { display: none; }
+
+.muted { color: #767676; }
+.small { font-size: 12px; }
+
+.stat-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.stat {
+  flex: 1;
+  background: #f7f7f8;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.stat-label { font-size: 11px; color: #767676; }
+.stat-value { font-size: 15px; font-weight: 600; margin-top: 2px; }
+
+button {
+  width: 100%;
+  padding: 9px;
+  border-radius: 8px;
+  border: none;
+  background: #111111;
+  color: white;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+button:hover { background: #2a2a2a; }
+button:disabled { background: #cccccc; cursor: default; }
+
+.link-btn {
+  background: transparent;
+  color: #767676;
+  font-weight: 400;
+  text-decoration: underline;
+}
+.link-btn:hover { background: transparent; color: #1a1a1a; }
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+.secondary-btn {
+  background: #f0f0f0;
+  color: #111111;
+}
+.secondary-btn:hover { background: #e2e2e2; }
+
+.auth-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+  gap: 8px;
+}
+
+.auth-row a { color: #111; }
+
+#popup-message { min-height: 14px; text-align: center; margin-top: 4px; }
+
+.sync-banner {
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+.sync-banner.warn { background: #fff4e5; color: #7a5200; border: 1px solid #f0c36d; }
+.sync-banner.error { background: #fdecea; color: #a12b20; border: 1px solid #f3b3ac; }
+.sync-banner.syncing { background: #eaf3ff; color: #1a4d8f; border: 1px solid #b7d4f7; }
+
+.queue-row { margin: -4px 0 10px 0; }

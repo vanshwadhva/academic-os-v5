@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Academic OS</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <span class="brand">Academic OS</span>
+      <span id="status-dot" class="status-dot"></span>
+    </header>
+
+    <div id="lumen-status" class="lumen-status muted small">Checking Lumen…</div>
+    <div id="sync-state-banner" class="sync-banner hidden"></div>
+
+    <div class="stat-row">
+      <div class="stat">
+        <div class="stat-label">Courses tracked</div>
+        <div id="course-count" class="stat-value">0</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Last pull</div>
+        <div id="last-sync" class="stat-value">—</div>
+      </div>
+    </div>
+
+    <div id="queue-row" class="queue-row hidden small muted"></div>
+
+    <button id="refresh-btn">Refresh from Lumen</button>
+    <button id="dashboard-btn" class="secondary-btn">Open dashboard</button>
+
+    <label class="toggle-row">
+      <span>Auto-refresh (every 15 min)</span>
+      <input type="checkbox" id="auto-sync-toggle" />
+    </label>
+
+    <div id="academic-os-auth" class="auth-row hidden">
+      <span id="user-info" class="muted small"></span>
+      <button id="sign-out-btn" class="link-btn">Sign out</button>
+    </div>
+
+    <div id="popup-message" class="muted small"></div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
