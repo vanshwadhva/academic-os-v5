@@ -1,4 +1,6 @@
-const ACADEMIC_OS_ORIGIN = "https://academic-os.vercel.app";
+const ACADEMIC_OS_SIGNIN_URL =
+  (typeof CONFIG !== "undefined" && CONFIG.ACADEMIC_OS_SIGNIN_URL) ||
+  "http://127.0.0.1:5500/index.html";
 
 const el = (id) => document.getElementById(id);
 
@@ -93,7 +95,7 @@ async function render() {
       `Session expired for ${status.user.email || "your account"}. <a href="#" id="open-academic-os-link">Reopen Academic OS</a> to refresh.`;
     el("open-academic-os-link").addEventListener("click", (e) => {
       e.preventDefault();
-      chrome.tabs.create({ url: ACADEMIC_OS_ORIGIN });
+      chrome.tabs.create({ url: ACADEMIC_OS_SIGNIN_URL });
     });
     el("sign-out-btn").classList.remove("hidden");
   } else {
@@ -101,7 +103,7 @@ async function render() {
       'Not signed in to Academic OS. <a href="#" id="open-academic-os-link">Sign in</a> to sync to cloud.';
     el("open-academic-os-link").addEventListener("click", (e) => {
       e.preventDefault();
-      chrome.tabs.create({ url: ACADEMIC_OS_ORIGIN });
+      chrome.tabs.create({ url: ACADEMIC_OS_SIGNIN_URL });
     });
     el("sign-out-btn").classList.add("hidden");
   }

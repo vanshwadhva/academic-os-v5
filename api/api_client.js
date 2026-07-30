@@ -37,8 +37,14 @@ const ApiClient = {
         clearTimeout(timeoutId);
 
         if (response.status === 401) {
-          await Auth.clearToken(); // keep user info; this is "expired", not "signed out"
-          throw new Error("AUTH_EXPIRED");
+          const text = await response.text().catch(() => "");
+          // Cert-fetch / infra failures are retryable — don't wipe the cached token.
+          const infraFail = /Failed to (fetch|refresh) Firebase signing certificates/i.test(text);
+          Logger.warn("Backend 401 on", path, text || "(no body)");
+          if (!infraFail) {
+            await Auth.clearToken(); // keep user info; this is "expired", not "signed out"
+          }
+          throw new Error(infraFail ? "BACKEND_UNREACHABLE" : "AUTH_EXPIRED");
         }
 
         if (response.status === 429 || response.status >= 500) {

@@ -64,22 +64,79 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   await refreshLumenProgress().catch((err) => Logger.warn("Auto-refresh failed:", err.message));
 });
 
-async function findOrOpenLumenTab() {
-  const existing = await chrome.tabs.query({ url: CONFIG.LUMEN_MATCH_PATTERN });
-  if (existing.length) return existing[0];
+function waitForTabComplete(tabId, timeoutMs = 30000) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      chrome.tabs.onUpdated.removeListener(listener);
+      reject(new Error("Lumen tab load timed out"));
+    }, timeoutMs);
 
-  const tab = await chrome.tabs.create({ url: CONFIG.LUMEN_HOME_URL, active: false });
-  await new Promise((resolve) => {
-    const listener = (tabId, info) => {
-      if (tabId === tab.id && info.status === "complete") {
+    const listener = (id, info) => {
+      if (id === tabId && info.status === "complete") {
+        clearTimeout(timer);
         chrome.tabs.onUpdated.removeListener(listener);
         resolve();
       }
     };
     chrome.tabs.onUpdated.addListener(listener);
+
+    chrome.tabs.get(tabId).then((tab) => {
+      if (tab.status === "complete") {
+        clearTimeout(timer);
+        chrome.tabs.onUpdated.removeListener(listener);
+        resolve();
+      }
+    }).catch(() => {});
   });
+}
+
+function tabsSendMessage(tabId, message) {
+  return new Promise((resolve, reject) => {
+    chrome.tabs.sendMessage(tabId, message, (res) => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+        return;
+      }
+      resolve(res);
+    });
+  });
+}
+
+async function findOrOpenLumenTab() {
+  const existing = await chrome.tabs.query({ url: CONFIG.LUMEN_MATCH_PATTERN });
+  if (existing.length) return existing[0];
+
+  const tab = await chrome.tabs.create({ url: CONFIG.LUMEN_HOME_URL, active: false });
+  await waitForTabComplete(tab.id);
   await new Promise((r) => setTimeout(r, 2000));
   return tab;
+}
+
+// Content scripts don't reinject into tabs that were open before an extension
+// reload — "Receiving end does not exist". Reload once, then retry.
+async function fetchProgressFromLumenTab(tab) {
+  let lastErr;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      if (attempt > 0) {
+        await chrome.tabs.reload(tab.id);
+        await waitForTabComplete(tab.id);
+        await new Promise((r) => setTimeout(r, 1500));
+      } else if (tab.status !== "complete") {
+        await waitForTabComplete(tab.id);
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+      return await tabsSendMessage(tab.id, { type: "FETCH_LUMEN_PROGRESS" });
+    } catch (err) {
+      lastErr = err;
+      const msg = String(err.message || "");
+      if (!msg.includes("Receiving end does not exist") && !msg.includes("Could not establish connection")) {
+        throw err;
+      }
+      Logger.warn(`Lumen content script not ready (attempt ${attempt + 1}/4):`, msg);
+    }
+  }
+  throw lastErr || new Error("Could not reach Lumen content script — open Lumen and sign in, then retry");
 }
 
 // Guards against overlapping refresh runs (e.g. alarm fires while a
@@ -92,16 +149,7 @@ async function refreshLumenProgress() {
 
   _refreshing = (async () => {
     const tab = await findOrOpenLumenTab();
-
-    const response = await new Promise((resolve, reject) => {
-      chrome.tabs.sendMessage(tab.id, { type: "FETCH_LUMEN_PROGRESS" }, (res) => {
-        if (chrome.runtime.lastError) {
-          reject(new Error(chrome.runtime.lastError.message));
-          return;
-        }
-        resolve(res);
-      });
-    });
+    const response = await fetchProgressFromLumenTab(tab);
 
     if (!response?.ok) {
       throw new Error(response?.error || "FETCH_LUMEN_PROGRESS_FAILED");
@@ -136,7 +184,11 @@ async function refreshLumenProgress() {
 // is open, this is a no-op; the page picks up the cache next time it
 // loads and asks via ACADEMIC_OS_REQUEST_PROGRESS.
 async function broadcastProgressToWebApp(progress) {
-  const tabs = await chrome.tabs.query({ url: `${CONFIG.ACADEMIC_OS_ORIGIN}/*` });
+  const origins = CONFIG.ACADEMIC_OS_ORIGINS || [CONFIG.ACADEMIC_OS_ORIGIN];
+  const tabLists = await Promise.all(
+    origins.map((origin) => chrome.tabs.query({ url: `${origin}/*` }))
+  );
+  const tabs = tabLists.flat();
   await Promise.allSettled(
     tabs.map(
       (tab) =>
@@ -174,6 +226,10 @@ async function handleMessage(message, sender) {
       }
       await Auth.storeToken(message.token, message.expiresIn);
       if (message.user && typeof message.user === "object") await Auth.storeUserInfo(message.user);
+      // Fresh token from the webapp — clear sticky "auth_expired" banner state.
+      await Storage.setLastSyncStatus("ok");
+      // Drain any queued sync now that auth is restored.
+      SyncManager.pushNow(null).catch((e) => Logger.debug("Post-auth sync deferred:", e.message));
       return { ok: true };
     }
 

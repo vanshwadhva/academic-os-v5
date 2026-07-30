@@ -66,5 +66,3 @@ Held back from higher purely by external unknowns, not code quality:
 - The backend (`academic-os-api.onrender.com`) — whether it's actually deployed, what its real error responses look like, whether it has a batch endpoint — is completely outside what I can audit from the extension side.
 
 The extension degrades gracefully around all of these (cookie auth carries the load if the token bridge fails; individual sync stays default until batch is confirmed; malformed/unverified API responses get dropped rather than corrupting the dashboard) — so "not fully verified" doesn't mean "will crash," it means "confirm these against production before you stop checking."
-EOF
-echo done

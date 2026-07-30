@@ -5,7 +5,8 @@
 // Explicit allowlist check as defense-in-depth: even though the manifest
 // match pattern already restricts where this script runs, don't trust
 // that alone — re-verify against CONFIG before acting on anything.
-if (window.location.origin !== CONFIG.ACADEMIC_OS_ORIGIN) {
+const ALLOWED_ORIGINS = CONFIG.ACADEMIC_OS_ORIGINS || [CONFIG.ACADEMIC_OS_ORIGIN];
+if (!ALLOWED_ORIGINS.includes(window.location.origin)) {
   Logger.warn("content.js loaded on unexpected origin, refusing to activate:", window.location.origin);
 } else {
   // Small ring buffer to dedupe identical auth messages fired twice by the
@@ -60,6 +61,13 @@ if (window.location.origin !== CONFIG.ACADEMIC_OS_ORIGIN) {
       });
       return;
     }
+
+    // Page may miss the initial READY (listener registered after document_idle).
+    // Ping → re-announce so the UI can flip to "Ext: connected".
+    if (msg.type === "ACADEMIC_OS_PING") {
+      announceReady();
+      return;
+    }
   });
 
   function handleAuthMessage(msg) {
@@ -97,5 +105,14 @@ if (window.location.origin !== CONFIG.ACADEMIC_OS_ORIGIN) {
     window.postMessage({ type: "ACADEMIC_OS_PROGRESS_DATA", progress: message.progress }, window.location.origin);
   });
 
-  window.postMessage({ type: "ACADEMIC_OS_EXTENSION_READY" }, window.location.origin);
+  function announceReady() {
+    window.postMessage({ type: "ACADEMIC_OS_EXTENSION_READY" }, window.location.origin);
+  }
+
+  announceReady();
+  // Retries cover the common race where the page script has not attached
+  // its message listener yet when document_idle content scripts first run.
+  setTimeout(announceReady, 250);
+  setTimeout(announceReady, 1000);
+  setTimeout(announceReady, 2500);
 }

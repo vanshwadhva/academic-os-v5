@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Academic OS – Lumen Sync",
-  "version": "2.1.0",
+  "version": "2.2.4",
   "description": "Pulls your BITS Pilani Lumen grades, assignments, and module progress into an Academic OS dashboard.",
   "icons": {
     "16": "icons/icon16.png",
@@ -22,12 +22,19 @@
   "permissions": ["storage", "alarms", "tabs"],
   "host_permissions": [
     "https://bits-dsai-tracker.web.app/*",
-    "https://academic-os-api.onrender.com/*",
+    "http://127.0.0.1:5500/*",
+    "http://localhost:5500/*",
+    "http://127.0.0.1:8000/*",
+    "http://localhost:8000/*",
     "https://lumen.bitspilani-digital.edu.in/*"
   ],
   "content_scripts": [
     {
-      "matches": ["https://bits-dsai-tracker.web.app/*"],
+      "matches": [
+        "https://bits-dsai-tracker.web.app/*",
+        "http://127.0.0.1:5500/*",
+        "http://localhost:5500/*"
+      ],
       "js": ["config.js", "utils/logger.js", "content_scripts/content.js"],
       "run_at": "document_idle"
     },

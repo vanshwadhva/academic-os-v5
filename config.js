@@ -2,10 +2,19 @@
 // in the service worker and as a content script on Lumen pages.
 
 const CONFIG = {
-  DEBUG: false, // flip true during development; Logger.info/debug go silent when false
+  DEBUG: true, // flip false for production; Logger.info/debug go silent when false
 
+  // Production tracker. Local static server (python -m http.server 5500) also allowed.
   ACADEMIC_OS_ORIGIN: "https://bits-dsai-tracker.web.app",
-  API_BASE_URL: "https://academic-os-api.onrender.com", // update once/if you have a real backend behind this
+  ACADEMIC_OS_ORIGINS: [
+    "https://bits-dsai-tracker.web.app",
+    "http://127.0.0.1:5500",
+    "http://localhost:5500"
+  ],
+  // Prefer local tracker while API_BASE_URL is localhost; popup "Sign in" opens this.
+  ACADEMIC_OS_SIGNIN_URL: "http://127.0.0.1:5500/index.html",
+  // Same host the webapp uses (window.BACKEND_API_URL). Override for prod deploy.
+  API_BASE_URL: "http://127.0.0.1:8000",
 
   LUMEN_BASE_URL: "https://lumen.bitspilani-digital.edu.in",
   LUMEN_HOME_URL: "https://lumen.bitspilani-digital.edu.in/d2l/home",
