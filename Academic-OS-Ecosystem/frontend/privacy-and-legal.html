@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MSc Data Science and AI — Compliance Portal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="icon" type="image/png" href="https://upload.wikimedia.org/wikipedia/en/d/d3/BITS_Pilani-Logo.svg">
+
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --card: #ffffff;
+    --border: #e3e5e9;
+    --text: #1f2328;
+    --text-soft: #5b6168;
+    --text-faint: #8a9099;
+
+    --sm-color: #4f7cac;
+    --sm-bg: #eaf1f8;
+    --dp-color: #6b9080;
+    --dp-bg: #eaf3ef;
+    --fe-color: #b08968;
+    --fe-bg: #f6efe8;
+    --dv-color: #8b6fa8;
+    --dv-bg: #f1ecf5;
+
+    --done: #6b9080;
+    --done-bg: #e8f1ed;
+    --upcoming: #c98a4b;
+    --upcoming-bg: #fbf0e3;
+    --overdue: #b95f5f;
+    --overdue-bg: #f8e9e9;
+    --neutral: #b5b9c0;
+
+    --shadow: 0 1px 2px rgba(20, 22, 26, 0.04), 0 4px 12px rgba(20, 22, 26, 0.05);
+    --shadow-hover: 0 2px 4px rgba(20, 22, 26, 0.06), 0 8px 20px rgba(20, 22, 26, 0.08);
+    --radius: 14px;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 32px 24px 80px;
+  }
+
+  header.top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+    gap: 16px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 20px;
+  }
+
+  .title-block {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .title-block img {
+    width: 48px;
+    height: 48px;
+    object-fit: contain;
+  }
+
+  .title-block h1 {
+    font-size: 20px;
+    font-weight: 700;
+    margin: 0 0 4px;
+    letter-spacing: -0.01em;
+  }
+
+  .title-block p {
+    margin: 0;
+    color: var(--text-soft);
+    font-size: 13px;
+  }
+
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--text-soft);
+    padding: 9px 16px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.15s ease;
+  }
+
+  .back-btn:hover {
+    background: #fafafa;
+    border-color: #d5d8dc;
+    color: var(--text);
+  }
+
+  .tab-container {
+    display: flex;
+    background: var(--card);
+    border: 1px solid var(--border);
+    padding: 6px;
+    border-radius: 12px;
+    margin-bottom: 28px;
+    box-shadow: var(--shadow);
+  }
+
+  .tab-btn {
+    flex: 1;
+    border: none;
+    background: none;
+    padding: 12px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-soft);
+    cursor: pointer;
+    border-radius: 9px;
+    transition: all 0.15s ease;
+    text-align: center;
+  }
+
+  .tab-btn.active {
+    background: var(--text);
+    color: white;
+  }
+
+  .search-wrapper {
+    margin-bottom: 24px;
+    position: relative;
+  }
+
+  .search-input {
+    width: 100%;
+    background: var(--card);
+    border: 1px solid var(--border);
+    padding: 12px 16px 12px 40px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-family: inherit;
+    outline: none;
+    transition: all 0.15s ease;
+  }
+
+  .search-input:focus {
+    border-color: #4f7cac;
+    box-shadow: 0 0 0 3px rgba(79, 124, 172, 0.12);
+  }
+
+  .search-icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-faint);
+    width: 16px;
+    height: 16px;
+    pointer-events: none;
+  }
+
+  .layout-grid {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    gap: 28px;
+  }
+
+  @media (max-width: 900px) {
+    .layout-grid {
+      grid-template-columns: 1fr;
+    }
+    .sidebar {
+      display: none; /* Hide quick indices on mobile */
+    }
+  }
+
+  .sidebar {
+    position: sticky;
+    top: 24px;
+    height: fit-content;
+  }
+
+  .nav-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    box-shadow: var(--shadow);
+  }
+
+  .nav-title {
+    font-size: 11.5px;
+    text-transform: uppercase;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: var(--text-faint);
+    margin-bottom: 14px;
+  }
+
+  .nav-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .nav-item {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-soft);
+    padding: 8px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: block;
+    text-decoration: none;
+  }
+
+  .nav-item:hover, .nav-item.active {
+    background: var(--bg);
+    color: var(--text);
+  }
+
+  .nav-item.active {
+    font-weight: 600;
+  }
+
+  .legal-content-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 40px;
+    box-shadow: var(--shadow);
+  }
+
+  @media (max-width: 600px) {
+    .legal-content-card {
+      padding: 24px;
+    }
+  }
+
+  .policy-section {
+    margin-bottom: 40px;
+    scroll-margin-top: 24px;
+  }
+
+  .policy-section:last-child {
+    margin-bottom: 0;
+  }
+
+  .policy-section h2 {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text);
+    margin-top: 0;
+    margin-bottom: 14px;
+    border-bottom: 1px solid #f1f2f4;
+    padding-bottom: 8px;
+  }
+
+  .policy-section p, .policy-section li {
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--text-soft);
+  }
+
+  .policy-section ul, .policy-section ol {
+    padding-left: 20px;
+    margin-bottom: 16px;
+  }
+
+  .policy-section li {
+    margin-bottom: 8px;
+  }
+
+  .meta-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #4f7cac;
+    background: #eaf1f8;
+    padding: 4px 10px;
+    border-radius: 999px;
+    margin-bottom: 16px;
+    text-transform: uppercase;
+  }
+
+  .badge-container {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+
+  .security-alert {
+    background: #f7fafc;
+    border-left: 4px solid #4f7cac;
+    padding: 16px;
+    border-radius: 0 10px 10px 0;
+    margin: 20px 0;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .security-alert-title {
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+
+  .highlight {
+    background: #fff9db;
+    padding: 2px 4px;
+    border-radius: 4px;
+    font-weight: 500;
+  }
+
+  .tech-spec {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin: 18px 0;
+  }
+
+  @media (max-width: 600px) {
+    .tech-spec {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .tech-spec-item {
+    background: #f8fafc;
+    border: 1px solid var(--border);
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 12.5px;
+  }
+
+  .tech-spec-title {
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+
+  .bottom {
+    margin-top: 40px;
+    padding: 24px 0 8px;
+    border-top: 1px solid var(--border);
+    color: var(--text-soft);
+  }
+
+  .footer-grid {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+
+  .footer-brand {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .footer-brand-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .footer-brand-subtitle {
+    font-size: 12px;
+    color: var(--text-soft);
+    line-height: 1.5;
+  }
+
+  .footer-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 12px;
+    text-align: right;
+    color: var(--text-faint);
+  }
+
+  .footer-meta a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .footer-meta a:hover {
+    color: var(--text);
+  }
+
+  @media (max-width: 700px) {
+    .footer-grid {
+      flex-direction: column;
+    }
+
+    .footer-meta {
+      text-align: left;
+    }
+  }
+
+  /* Utility classes */
+  .hidden {
+    display: none !important;
+  }
+</style>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-FPJTK0NPZZ"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-FPJTK0NPZZ');
+</script>
+</head>
+<body>
+
+<div class="wrap">
+  <!-- Header -->
+  <header class="top">
+    <div class="title-block">
+      <img src="https://upload.wikimedia.org/wikipedia/en/d/d3/BITS_Pilani-Logo.svg" alt="BITS Pilani">
+      <div>
+        <h1>MSc DSAI Student Terminal</h1>
+        <p>Compliance, Regulatory & Privacy Operations</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <a href="./index.html" class="back-btn">
+        <svg style="width:16px; height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="19" y1="12" x2="5" y2="12"></line>
+          <polyline points="12 19 5 12 12 5"></polyline>
+        </svg>
+        Return to Terminal
+      </a>
+    </div>
+  </header>
+
+  <!-- Navigation Tabs -->
+  <div class="tab-container">
+    <button class="tab-btn active" id="tabPrivacy">Privacy Policy</button>
+    <button class="tab-btn" id="tabTerms">Terms & Conditions</button>
+  </div>
+
+  <!-- Search wrapper -->
+  <div class="search-wrapper">
+    <svg class="search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+      <circle cx="11" cy="11" r="8"></circle>
+      <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+    </svg>
+    <input type="text" class="search-input" id="legalSearch" placeholder="Search legal parameters, security criteria, models data...">
+  </div>
+
+  <!-- Content Layout Grid -->
+  <div class="layout-grid">
+    
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="nav-card" id="privacySidebar">
+        <div class="nav-title">Privacy Sections</div>
+        <nav class="nav-list">
+          <a href="#p-data" class="nav-item active">1. Behavioral Data Scopes</a>
+          <a href="#p-models" class="nav-item">2. Predictive Modeling & AI</a>
+          <a href="#p-rag" class="nav-item">3. Vector Storage & RAG</a>
+          <a href="#p-instit" class="nav-item">4. Institutional Disclosures</a>
+          <a href="#p-rights" class="nav-item">5. Student Rights</a>
+          <a href="#p-retention" class="nav-item">6. Data Retention Policy</a>
+        </nav>
+      </div>
+      <div class="nav-card hidden" id="termsSidebar">
+        <div class="nav-title">Terms Sections</div>
+        <nav class="nav-list">
+          <a href="#t-auth" class="nav-item">1. Academic Domain Authorization</a>
+          <a href="#t-academic" class="nav-item">2. Academic Integrity Rules</a>
+          <a href="#t-predictive" class="nav-item">3. Predictive Logic Limitations</a>
+          <a href="#t-assistant" class="nav-item">4. RAG Assistant SLA</a>
+          <a href="#t-security" class="nav-item">5. Terminal Security Integrity</a>
+          <a href="#t-breach" class="nav-item">6. Academic Breach Recourse</a>
+        </nav>
+      </div>
+    </aside>
+
+    <!-- Main Legal Content Panel -->
+    <main class="legal-content-card" id="legalMain">
+      
+      <!-- Privacy Policy Section -->
+      <div id="privacyPolicy">
+        <div class="badge-container">
+          <span class="meta-tag">Operational Release v2.4</span>
+          <span class="meta-tag" style="background:#e8f1ed; color:#6b9080;">Active Sync Enforced</span>
+        </div>
+        
+        <p style="font-size: 13px; color: var(--text-faint); margin-top: 0; margin-bottom: 24px;">Last Updated: June 26, 2026</p>
+
+        <section class="policy-section" id="p-data">
+          <h2>1. Explicit & Implicit Behavioral Data Scopes</h2>
+          <p>The MSc Data Science and AI Progress Tracker monitors operational actions to establish study pattern metrics and generate academic performance analytics. Data collection is categorized as follows:</p>
+          <ul>
+            <li><strong>Explicit Progress Assets:</strong> Student study states, syllabus module interactions, checkpoint accomplishments, assignment metrics, and quiz values.</li>
+            <li><strong>Implicit Behavioral Metrics:</strong> User dwell time, navigation interactions, session logging, clickstream trajectories, active vs. idle state durations, study session timestamps, and device identifiers.</li>
+            <li><strong>Cognitive Tasks & Metadata:</strong> Personal notes, flashcards, study reminders, and scheduling delay responses.</li>
+          </ul>
+          <div class="security-alert">
+            <div class="security-alert-title">Encryption In-Transit and At-Rest</div>
+            All data logged via the BITS Student Terminal is protected under absolute HTTPS (TLS 1.3) protocols. Data residing inside the Cloud synchronization database utilizes AES-256 standards.
+          </div>
+        </section>
+
+        <section class="policy-section" id="p-models">
+          <h2>2. Predictive Modeling & Machine Learning</h2>
+          <p>To provide personal performance projections and interventions, telemetry streams are evaluated through dedicated machine learning architectures. Your behavioral features feed the following pipelines:</p>
+          
+          <div class="tech-spec">
+            <div class="tech-spec-item">
+              <div class="tech-spec-title">XGBoost Score Projections</div>
+              <p style="margin: 0; font-size: 11.5px; color: var(--text-soft);">Forecasts final score values based on current assignment, quiz metrics, and rolling study consistency averages.</p>
+            </div>
+            <div class="tech-spec-item">
+              <div class="tech-spec-title">Gaussian Mixture Clustering</div>
+              <p style="margin: 0; font-size: 11.5px; color: var(--text-soft);">Identifies peak productivity brackets (e.g. Morning, Evening) to auto-calibrate optimal notification intervals.</p>
+            </div>
+            <div class="tech-spec-item">
+              <div class="tech-spec-title">LightGBM Dropout Classifiers</div>
+              <p style="margin: 0; font-size: 11.5px; color: var(--text-soft);">Categorizes study risk levels into Low, Medium, or High based on streak loss and missed milestones.</p>
+            </div>
+            <div class="tech-spec-item">
+              <div class="tech-spec-title">Sequence Modeling (LSTM)</div>
+              <p style="margin: 0; font-size: 11.5px; color: var(--text-soft);">Evaluates past weeks' actions to project upcoming module completion percentages.</p>
+            </div>
+          </div>
+          <p>These algorithms continuously adapt. Personal profiles are compiled exclusively for private diagnostic purposes to foster academic achievement.</p>
+        </section>
+
+        <section class="policy-section" id="p-rag">
+          <h2>3. Vector Storage & RAG Processing</h2>
+          <p>When using the Integrated Academic Assistant, academic assets and student notes are dynamically parsed and processed:</p>
+          <ul>
+            <li><strong>Content Vectorization:</strong> Notes, quiz questions, and textbooks are mapped into a dense vector space using secure embedding algorithms.</li>
+            <li><strong>Vector Storage:</strong> Generated vectors are stored in secure indexed databases (such as Qdrant or Pinecone) linked to your unique BITS Student terminal ID.</li>
+            <li><strong>Generative LLM Pipelines:</strong> Contextual queries are handled through secure API frameworks (OpenAI / Gemini). Content passed to the model is scrubbed of all institutional student directory listings. No data is used for external training models.</li>
+          </ul>
+        </section>
+
+        <section class="policy-section" id="p-instit">
+          <h2>4. Institutional Disclosures</h2>
+          <p>Data stored in this tracker is intended primarily for the student's self-improvement. However, to guarantee professional academic growth, academic progression dashboards may be shared under strict parameters:</p>
+          <ol>
+            <li><strong>Dean of Academics & Course Instructors:</strong> To monitor overall engagement and evaluate structural design effectiveness.</li>
+            <li><strong>System Administrators:</strong> To guarantee system performance, manage user terminal sessions, and maintain data storage security.</li>
+          </ol>
+        </section>
+
+        <section class="policy-section" id="p-rights">
+          <h2>5. Student Rights</h2>
+          <p>As a student of BITS Pilani, you maintain distinct privacy protections over your terminal analytical records:</p>
+          <ul>
+            <li><strong>Right to Inspection:</strong> You can view all metrics compiled by your terminal directly through the interface.</li>
+            <li><strong>Right to Data Portability:</strong> You can export logged analytical parameters into structured CSV/JSON payloads.</li>
+            <li><strong>Right to Erasure:</strong> You can request immediate erasure of your historical analytical values, resetting your learning weights in the database.</li>
+          </ul>
+        </section>
+
+        <section class="policy-section" id="p-retention">
+          <h2>6. Data Retention Policy</h2>
+          <p>Academic telemetry metrics, notes embeddings, and completion logs are stored for the active duration of the MSc program. Upon graduation, program completion, or student profile termination, all associated personal identifier mappings are permanently anonymized or deleted within 60 academic calendar days.</p>
+        </section>
+      </div>
+
+      <!-- Terms & Conditions Section -->
+      <div id="termsConditions" class="hidden">
+        <div class="badge-container">
+          <span class="meta-tag" style="background:#fbf0e3; color:#c98a4b;">Trimester Regulatory Framework</span>
+          <span class="meta-tag" style="background:#f8e9e9; color:#b95f5f;">BITS Code Enforced</span>
+        </div>
+
+        <p style="font-size: 13px; color: var(--text-faint); margin-top: 0; margin-bottom: 24px;">Last Updated: June 26, 2026</p>
+
+        <section class="policy-section" id="t-auth">
+          <h2>1. Academic Domain Authorization</h2>
+          <p>Access to the Student Terminal, synchronization utilities, and performance modeling algorithms is strictly restricted to students currently enrolled in the BITS Pilani MSc Data Science and AI program. Users must authenticate exclusively via their official <span class="highlight">@bitspilani-digital.edu.in</span> email domain.</p>
+          <p>Unauthorized logins, credential sharing, or accessing the application with non-institutional email domains will result in instant session termination and a referral to academic authorities.</p>
+        </section>
+
+        <section class="policy-section" id="t-academic">
+          <h2>2. Academic Integrity Rules</h2>
+          <p>The academic tracking systems, dashboard summaries, and AI recommendations are designed to foster study consistency. Students agree to follow these guidelines:</p>
+          <ul>
+            <li><strong>Accurate Progress Verification:</strong> Users must not simulate or falsify progress metrics by automating module checkmarks without reviewing the coursework content.</li>
+            <li><strong>Legitimate AI Assistant Usage:</strong> The LLM Assistant is an educational aid. Generating direct, unauthored responses for graded quizzes or assignments is a violation of the BITS Pilani Honor Code.</li>
+          </ul>
+        </section>
+
+        <section class="policy-section" id="t-predictive">
+          <h2>3. Predictive Logic Limitations</h2>
+          <p>The Machine Learning analytical modules (expected performance models, dropout risks, and grade projections) are calculated models based on study patterns. These values are designed for guidance and do not represent guaranteed grades. Actual trimester outcomes are governed solely by course coordinators, exam performance, and standard grading policies.</p>
+        </section>
+
+        <section class="policy-section" id="t-assistant">
+          <h2>4. Academic RAG Assistant SLA</h2>
+          <p>While BITS Pilani strives for high-quality accuracy in model retrieval operations, the Academic Assistant may occasionally serve contextually inaccurate responses. Students are expected to verify all academic facts, mathematical calculations, and programming syntax against official BITS course resources and prescribed textbooks.</p>
+        </section>
+
+        <section class="policy-section" id="t-security">
+          <h2>5. Terminal Security & Usage Integrity</h2>
+          <p>Users must not compromise the integrity of the tracking application. The following actions are strictly prohibited:</p>
+          <ul>
+            <li>Reverse-engineering the tracking API endpoints or scraping structural database schemas.</li>
+            <li>Automating high-volume database queries that degrade the system for other students.</li>
+            <li>Injecting malicious content, script modules, or broken payloads into personal notes stored in the database.</li>
+          </ul>
+        </section>
+
+        <section class="policy-section" id="t-breach">
+          <h2>6. Academic Breach Recourse</h2>
+          <p>Failure to comply with these terms, domain rules, or academic integrity policies may result in immediate suspension of tracker synchronization privileges, deletion of analytical profiles, and academic disciplinary action under the regulatory framework of the Birla Institute of Technology and Science, Pilani.</p>
+        </section>
+      </div>
+
+    </main>
+  </div>
+  
+  <footer class="bottom">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <div class="footer-brand-title">Academic OS Compliance Portal</div>
+        <div class="footer-brand-subtitle">
+          Privacy, security, legal compliance, and responsible academic data governance for Academic OS.
+        </div>
+      </div>
+
+      <div class="footer-meta">
+        <div>© 2026 Academic OS. All rights reserved.</div>
+        <div>Designed for BITS Pilani MSc Data Science & AI learners.</div>
+        <div>Version 2.4 • Secure Google Authentication • TLS Protected</div>
+      </div>
+    </div>
+  </footer>
+</div>
+
+<script>
+  // ---------- FIREBASE AUTH GUARD ----------
+  const firebaseConfig = {
+    apiKey: "AIzaSyCTNPwLzpWNUI7ltQFJtv_E4W3oZQWnflQ",
+    authDomain: "bits-dsai-tracker.firebaseapp.com",
+    projectId: "bits-dsai-tracker",
+    storageBucket: "bits-dsai-tracker.firebasestorage.app",
+    messagingSenderId: "530627005818",
+    appId: "1:530627005818:web:24ca6180f9ed9e2fcbdac3",
+    measurementId: "G-LQWPPG78GS"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+
+  auth.onAuthStateChanged(async (user) => {
+    if (!user) {
+      window.location.href = "login.html";
+      return;
+    }
+
+    const email = user.email || "";
+
+    if (!email.endsWith("@bitspilani-digital.edu.in")) {
+      await auth.signOut();
+      alert("Only BITS Pilani Digital accounts can use this application.");
+      window.location.href = "login.html";
+      return;
+    }
+  });
+
+  function logoutUser() {
+    auth.signOut().then(() => {
+      window.location.href = "login.html";
+    });
+  }
+
+  // ---------- PORTAL CONTROLLERS ----------
+  const tabPrivacy = document.getElementById('tabPrivacy');
+  const tabTerms = document.getElementById('tabTerms');
+  const privacyPolicy = document.getElementById('privacyPolicy');
+  const termsConditions = document.getElementById('termsConditions');
+  const privacySidebar = document.getElementById('privacySidebar');
+  const termsSidebar = document.getElementById('termsSidebar');
+
+  // Tab Toggle Logic
+  function selectTab(tab) {
+    if (tab === 'privacy') {
+      tabPrivacy.classList.add('active');
+      tabTerms.classList.remove('active');
+      privacyPolicy.classList.remove('hidden');
+      termsConditions.classList.add('hidden');
+      privacySidebar.classList.remove('hidden');
+      termsSidebar.classList.add('hidden');
+      
+      // Select first sidebar element
+      updateActiveSidebarItem(privacySidebar.querySelector('.nav-item'));
+    } else {
+      tabTerms.classList.add('active');
+      tabPrivacy.classList.remove('active');
+      termsConditions.classList.remove('hidden');
+      privacyPolicy.classList.add('hidden');
+      termsSidebar.classList.remove('hidden');
+      privacySidebar.classList.add('hidden');
+      
+      // Select first sidebar element
+      updateActiveSidebarItem(termsSidebar.querySelector('.nav-item'));
+    }
+  }
+
+  tabPrivacy.addEventListener('click', () => selectTab('privacy'));
+  tabTerms.addEventListener('click', () => selectTab('terms'));
+
+  // Sidebar Link Active Highlight Loop
+  const navItems = document.querySelectorAll('.nav-item');
+  function updateActiveSidebarItem(target) {
+    navItems.forEach(item => item.classList.remove('active'));
+    target.classList.add('active');
+  }
+
+  navItems.forEach(item => {
+    item.addEventListener('click', (e) => {
+      updateActiveSidebarItem(e.currentTarget);
+    });
+  });
+
+  // ---------- DOCUMENT SEARCH ENGINE ----------
+  const searchInput = document.getElementById('legalSearch');
+  searchInput.addEventListener('input', (e) => {
+    const term = e.target.value.toLowerCase().trim();
+    const sections = document.querySelectorAll('.policy-section');
+    
+    sections.forEach(section => {
+      const text = section.innerText.toLowerCase();
+      if (text.includes(term)) {
+        section.style.display = 'block';
+      } else {
+        section.style.display = 'none';
+      }
+    });
+  });
+</script>
+</body>
+</html>

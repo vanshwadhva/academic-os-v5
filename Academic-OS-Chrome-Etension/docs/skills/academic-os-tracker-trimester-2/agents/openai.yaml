@@ -1,0 +1,4 @@
+interface:
+  display_name: "Academic OS Tracker Trimerster 2"
+  short_description: "Work on the Academic OS Lumen sync extension for Trimester 2"
+  default_prompt: "Use $academic-os-tracker-trimester-2 to understand, debug, extend, or operate this repository."

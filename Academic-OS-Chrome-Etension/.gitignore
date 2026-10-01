@@ -1,0 +1,6 @@
+# Keep local duplicate checkout and archive bundles out of the publishable extension source.
+/archive/
+
+# Local development artifacts
+node_modules/
+.DS_Store

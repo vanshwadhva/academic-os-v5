@@ -1,0 +1,3092 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MSc Data Stores and Pipeline — Progress Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="icon" type="image/png" href="Academic OS Logo.png">
+
+<!-- Firebase Compat Libraries for absolute standard CDN compatibility inside nested preview environments -->
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-FPJTK0NPZZ"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-FPJTK0NPZZ');
+</script>
+
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --card: #ffffff;
+    --border: #e3e5e9;
+    --text: #1f2328;
+    --text-soft: #5b6168;
+    --text-faint: #8a9099;
+
+    --sm-color: #4f7cac;
+    --sm-bg: #eaf1f8;
+    --dp-color: #6b9080;
+    --dp-bg: #eaf3ef;
+    --fe-color: #b08968;
+    --fe-bg: #f6efe8;
+    --dv-color: #8b6fa8;
+    --dv-bg: #f1ecf5;
+
+    --done: #6b9080;
+    --done-bg: #e8f1ed;
+    --upcoming: #c98a4b;
+    --upcoming-bg: #fbf0e3;
+    --overdue: #b95f5f;
+    --overdue-bg: #f8e9e9;
+    --neutral: #b5b9c0;
+
+    --shadow: 0 1px 2px rgba(20, 22, 26, 0.04), 0 4px 12px rgba(20, 22, 26, 0.05);
+    --shadow-hover: 0 2px 4px rgba(20, 22, 26, 0.06), 0 8px 20px rgba(20, 22, 26, 0.08);
+    --radius: 14px;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 32px 24px 80px;
+  }
+
+  .trimester-picker {
+    margin-top: 12px;
+  }
+
+  .trimester-picker-help {
+    color: var(--text-soft);
+    font-size: 13px;
+    margin: -4px 0 16px;
+  }
+
+  .trimester-grid {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(155px, 1fr));
+    gap: 12px;
+    overflow-x: auto;
+    padding: 2px 2px 10px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .trimester-choice {
+    min-height: 132px;
+    padding: 18px 16px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    color: var(--text);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 14px;
+    text-align: left;
+    font-family: inherit;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+  }
+
+  .trimester-choice:hover,
+  .trimester-choice:focus-visible {
+    border-color: var(--sm-color);
+    box-shadow: var(--shadow-hover);
+    transform: translateY(-2px);
+    outline: none;
+  }
+
+  .trimester-choice-name {
+    font-size: 15px;
+    font-weight: 700;
+  }
+
+  .trimester-choice-description {
+    color: var(--text-soft);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .trimester-empty-state {
+    padding: 24px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    color: var(--text-soft);
+    font-size: 14px;
+    box-shadow: var(--shadow);
+  }
+
+  header.top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .title-block h1 {
+    font-size: 22px;
+    font-weight: 700;
+    margin: 0 0 4px;
+    letter-spacing: -0.01em;
+  }
+
+  .title-block p {
+    margin: 0;
+    color: var(--text-soft);
+    font-size: 13.5px;
+  }
+
+  .brand-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .brand-logo {
+    width: 54px;
+    height: 54px;
+    object-fit: contain;
+    flex-shrink: 0;
+  }
+
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .user-badge {
+    background: #ffffff;
+    border: 1px solid var(--border);
+    padding: 8px 14px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-soft);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+  }
+
+  .user-badge::before {
+    content: '';
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    background: #10b981;
+    border-radius: 50%;
+  }
+
+  .sync-indicator {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-faint);
+    transition: opacity 0.3s ease;
+  }
+
+  .reset-btn {
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--text-soft);
+    padding: 9px 16px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    font-family: inherit;
+  }
+
+  .reset-btn:hover {
+    background: #fafafa;
+    border-color: #d5d8dc;
+    color: var(--text);
+  }
+
+  .reset-btn.logout {
+    border-color: #f3a2a2;
+    color: #b95f5f;
+  }
+
+  .reset-btn.logout:hover {
+    background: #fff5f5;
+    border-color: #e57373;
+    color: #9e2a2a;
+  }
+
+  /* Dashboard summary cards */
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 14px;
+    margin-bottom: 32px;
+  }
+
+  @media (max-width: 900px) {
+    .summary-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  .summary-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    box-shadow: var(--shadow);
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+  }
+
+  .summary-card:hover {
+    box-shadow: var(--shadow-hover);
+    transform: translateY(-1px);
+  }
+
+  .summary-card .label {
+    font-size: 12px;
+    color: var(--text-faint);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 10px;
+  }
+
+  .summary-card .value {
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 10px;
+  }
+
+  .mini-bar {
+    height: 6px;
+    background: #eef0f2;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .mini-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.5s ease;
+  }
+
+  .summary-card.overall .value { font-size: 30px; }
+
+  .prediction-section {
+    margin-bottom: 32px;
+  }
+
+  .prediction-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+  }
+
+  @media (max-width: 900px) {
+    .prediction-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .analytics-section {
+    margin-bottom: 32px;
+  }
+
+  .analytics-grid {
+    display:grid;
+    grid-template-columns:repeat(2,1fr);
+    gap:14px;
+  }
+
+  @media (max-width:900px){
+    .analytics-grid{grid-template-columns:1fr;}
+  }
+
+  .chart-card{
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:18px 20px;
+    box-shadow:var(--shadow);
+  }
+
+  .chart-card canvas{
+    width:100%!important;
+    max-height:260px;
+  }
+
+  .prediction-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    box-shadow: var(--shadow);
+  }
+
+  .prediction-card .label {
+    font-size: 12px;
+    color: var(--text-faint);
+    text-transform: uppercase;
+    font-weight: 600;
+    margin-bottom: 10px;
+  }
+
+  .prediction-card .value {
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 10px;
+  }
+
+  .prediction-card ul {
+    margin: 0;
+    padding-left: 18px;
+    color: var(--text-soft);
+    font-size: 12px;
+    line-height: 1.7;
+  }
+
+  /* Course filter tabs */
+  .filter-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+
+  .filter-pill {
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--text-soft);
+    padding: 8px 16px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    font-family: inherit;
+  }
+
+  .filter-pill:hover { border-color: #c9cdd2; }
+
+  .filter-pill.active {
+    background: var(--text);
+    color: white;
+    border-color: var(--text);
+  }
+
+  /* Course sections */
+  .course-section {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 18px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+    transition: box-shadow 0.2s ease;
+  }
+
+  .course-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 22px;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .course-header-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .course-dot {
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .course-name {
+    font-size: 15.5px;
+    font-weight: 600;
+  }
+
+  .course-meta {
+    font-size: 12.5px;
+    color: var(--text-faint);
+    margin-top: 2px;
+  }
+
+  .course-header-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .course-progress-text {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-soft);
+    min-width: 42px;
+    text-align: right;
+  }
+
+  .course-progress-bar {
+    width: 130px;
+    height: 7px;
+    background: #eef0f2;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .course-progress-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.5s ease;
+  }
+
+  .chevron {
+    width: 18px;
+    height: 18px;
+    transition: transform 0.25s ease;
+    color: var(--text-faint);
+  }
+
+  .chevron.open { transform: rotate(180deg); }
+
+  .week-list {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.35s ease;
+  }
+
+  .week-list.open {
+    max-height: 3000px;
+  }
+
+  .week-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 22px;
+    border-top: 1px solid #f0f1f3;
+    transition: background 0.15s ease;
+  }
+
+  .week-row:hover { background: #fafbfb; }
+
+  .week-check {
+    width: 22px;
+    height: 22px;
+    border-radius: 7px;
+    border: 1.5px solid #d4d7db;
+    cursor: pointer;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+    background: white;
+  }
+
+  .week-check svg {
+    width: 13px;
+    height: 13px;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+
+  .week-check.checked svg { opacity: 1; }
+
+  .week-num {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-faint);
+    width: 56px;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  .week-info { flex: 1; min-width: 0; }
+
+  .week-topic {
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  .week-date {
+    font-size: 12px;
+    color: var(--text-faint);
+    margin-top: 1px;
+  }
+
+  .week-syllabus {
+    margin: 8px 0 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .module-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    cursor: pointer;
+  }
+
+  .module-check {
+    width: 16px;
+    height: 16px;
+    border-radius: 5px;
+    border: 1.5px solid #d4d7db;
+    cursor: pointer;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+    background: white;
+    margin-top: 1px;
+  }
+
+  .module-check svg {
+    width: 10px;
+    height: 10px;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+
+  .module-check.checked svg { opacity: 1; }
+
+  .module-label {
+    font-size: 12px;
+    color: var(--text-soft);
+    line-height: 1.5;
+  }
+
+  .module-label.checked-text {
+    color: var(--text-faint);
+    text-decoration: line-through;
+  }
+
+  .week-row {
+    align-items: flex-start;
+  }
+
+  .week-check {
+    margin-top: 1px;
+  }
+
+  .week-status-tag {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 999px;
+    flex-shrink: 0;
+    white-space: nowrap;
+    margin-top: 1px;
+  }
+
+  .week-row.studied .week-topic { color: var(--text-soft); }
+
+  /* Deadlines section */
+  .deadline-section {
+    margin-top: 36px;
+  }
+
+  .section-title {
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .deadline-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  @media (max-width: 800px) {
+    .deadline-grid { grid-template-columns: 1fr; }
+  }
+
+  .deadline-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    box-shadow: var(--shadow);
+  }
+
+  .deadline-card .dl-left { min-width: 0; }
+
+  .deadline-card .dl-title {
+    font-size: 13.5px;
+    font-weight: 600;
+  }
+
+  .deadline-card .dl-sub {
+    font-size: 12px;
+    color: var(--text-faint);
+    margin-top: 2px;
+  }
+
+  .dl-date-tag {
+    font-size: 12px;
+    font-weight: 700;
+    padding: 6px 12px;
+    border-radius: 8px;
+    flex-shrink: 0;
+  }
+
+  footer.bottom {
+    text-align: center;
+    margin-top: 40px;
+    color: var(--text-faint);
+    font-size: 12px;
+  }
+
+  /* AUTHENTICATION PORTAL STYLING */
+  .auth-container {
+    max-width: 440px;
+    margin: 80px auto;
+    padding: 40px 32px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 16px -6px rgba(0, 0, 0, 0.05);
+    text-align: center;
+    display: none; /* Controlled dynamically */
+  }
+
+  .auth-logo {
+    width: 96px;
+    height: 96px;
+    margin: 0 auto 20px;
+    display: block;
+    object-fit: contain;
+  }
+
+  .auth-title {
+    max-width: 320px;
+    margin: 0 auto 6px;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.015em;
+    color: var(--text);
+    text-align: center;
+  }
+
+  .auth-sub {
+    font-size: 13px;
+    color: var(--text-soft);
+    margin-bottom: 24px;
+    line-height: 1.5;
+  }
+
+  /* Google Sign-in Button Styles */
+  .google-auth-btn {
+    width: 100%;
+    max-width: 320px;
+    padding: 11px 14px;
+    background: #ffffff;
+    border: 1px solid #d4d7db;
+    border-radius: 10px;
+    font-family: inherit;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--text-soft);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+    margin: 0 auto 20px;
+  }
+
+  .google-auth-btn:hover {
+    background: #f8f9fa;
+    border-color: #c3c6cb;
+    color: var(--text);
+  }
+
+  .google-icon {
+    width: 18px;
+    height: 18px;
+  }
+
+  .auth-domain-note {
+    background: #f7fafc;
+    border: 1px dashed #cbd5e0;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 11px;
+    color: var(--text-soft);
+    text-align: left;
+    margin-bottom: 18px;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .auth-domain-note svg {
+    width: 16px;
+    height: 16px;
+    color: #4f7cac;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .auth-alert {
+    padding: 12px 14px;
+    border-radius: 8px;
+    font-size: 12.5px;
+    margin-bottom: 18px;
+    text-align: left;
+    line-height: 1.4;
+    display: none;
+  }
+
+  .auth-alert.error {
+    display: block;
+    background: var(--overdue-bg);
+    color: var(--overdue);
+    border: 1px solid rgba(185, 95, 95, 0.15);
+  }
+
+  .auth-alert.success {
+    display: block;
+    background: var(--done-bg);
+    color: var(--done);
+    border: 1px solid rgba(107, 144, 128, 0.15);
+  }
+
+  /* Sync Indicator animation */
+  .syncing-pulse {
+    animation: pulse 1.5s infinite ease-in-out;
+  }
+
+  @keyframes pulse {
+    0% { opacity: 0.4; }
+    50% { opacity: 1; }
+    100% { opacity: 0.4; }
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  /* Loader Skeleton */
+  .skeleton-loader {
+    max-width: 600px;
+    margin: 100px auto;
+    text-align: center;
+    font-weight: 500;
+    color: var(--text-soft);
+  }
+  
+  .hidden { display: none !important; }
+
+  /* ── Post to Timeline ─────────────────────────────────────── */
+  .timeline-post-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 22px;
+    margin-bottom: 32px;
+    box-shadow: var(--shadow);
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .timeline-post-bar .tl-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-soft);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .timeline-post-bar .tl-label svg {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    opacity: 0.55;
+  }
+
+  .post-timeline-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--text);
+    color: #ffffff;
+    border: none;
+    border-radius: 10px;
+    padding: 10px 20px;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+    white-space: nowrap;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+    letter-spacing: -0.01em;
+  }
+
+  .post-timeline-btn:hover {
+    background: #2d3238;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.15);
+    transform: translateY(-1px);
+  }
+
+  .post-timeline-btn:active {
+    transform: translateY(0);
+  }
+
+  .post-timeline-btn svg {
+    width: 15px;
+    height: 15px;
+    flex-shrink: 0;
+  }
+
+  .post-timeline-btn.loading {
+    opacity: 0.7;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
+  /* ── Screenshot card (off-screen render target) ──────────── */
+  #tlSnapshotCard {
+    position: fixed;
+    top: -9999px;
+    left: -9999px;
+    width: 860px;
+    background: #0f1117;
+    border-radius: 20px;
+    padding: 0;
+    overflow: hidden;
+    font-family: 'Inter', -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .tl-card-header {
+    background: linear-gradient(135deg, #16181f 0%, #1c1f2a 100%);
+    padding: 36px 44px 28px;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+  }
+
+  .tl-card-header-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .tl-logo-wrap {
+    width: 48px;
+    height: 48px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    overflow: hidden;
+  }
+
+  .tl-logo-wrap img {
+    width: 34px;
+    height: 34px;
+    object-fit: contain;
+  }
+
+  .tl-card-title {
+    font-size: 17px;
+    font-weight: 700;
+    color: #ffffff;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    margin-bottom: 5px;
+  }
+
+  .tl-card-sub {
+    font-size: 12px;
+    color: rgba(255,255,255,0.4);
+    font-weight: 500;
+    letter-spacing: 0.02em;
+  }
+
+  .tl-card-badge {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.09);
+    border-radius: 10px;
+    padding: 10px 16px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .tl-card-badge .bd-val {
+    font-size: 28px;
+    font-weight: 800;
+    color: #ffffff;
+    letter-spacing: -0.03em;
+    line-height: 1;
+  }
+
+  .tl-card-badge .bd-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.35);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-top: 4px;
+  }
+
+  .tl-card-body {
+    padding: 28px 44px 32px;
+  }
+
+  .tl-course-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+    margin-bottom: 24px;
+  }
+
+  .tl-course-item {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 14px;
+    padding: 16px 18px;
+  }
+
+  .tl-course-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+
+  .tl-course-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-right: 8px;
+  }
+
+  .tl-course-name {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.7);
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .tl-course-pct {
+    font-size: 14px;
+    font-weight: 800;
+    color: #ffffff;
+    letter-spacing: -0.01em;
+  }
+
+  .tl-bar-track {
+    height: 5px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .tl-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+  }
+
+  .tl-stats-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 28px;
+  }
+
+  .tl-stat-cell {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 12px;
+    padding: 14px 16px;
+    text-align: center;
+  }
+
+  .tl-stat-val {
+    font-size: 20px;
+    font-weight: 800;
+    color: #ffffff;
+    letter-spacing: -0.02em;
+    line-height: 1;
+    margin-bottom: 5px;
+  }
+
+  .tl-stat-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.3);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+  }
+
+  .tl-section-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: rgba(255,255,255,0.3);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 12px;
+  }
+
+  .tl-pred-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 28px;
+  }
+
+  .tl-pred-cell {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 12px;
+    padding: 14px 16px;
+  }
+
+  .tl-pred-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.3);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    margin-bottom: 6px;
+  }
+
+  .tl-pred-val {
+    font-size: 16px;
+    font-weight: 700;
+    color: #ffffff;
+    letter-spacing: -0.01em;
+  }
+
+  .tl-card-footer {
+    border-top: 1px solid rgba(255,255,255,0.06);
+    padding: 16px 44px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .tl-footer-brand {
+    font-size: 11px;
+    font-weight: 700;
+    color: rgba(255,255,255,0.25);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .tl-footer-ts {
+    font-size: 11px;
+    color: rgba(255,255,255,0.2);
+    font-weight: 500;
+  }
+
+  /* ── Preview Modal ────────────────────────────────────────── */
+  .tl-preview-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(10, 12, 18, 0.75);
+    backdrop-filter: blur(6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    padding: 24px;
+    font-family: 'Inter', -apple-system, sans-serif;
+  }
+
+  .tl-preview-modal {
+    background: #ffffff;
+    border-radius: 18px;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.3);
+    max-width: 920px;
+    width: 100%;
+    overflow: hidden;
+  }
+
+  .tl-preview-top {
+    padding: 20px 24px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .tl-preview-top h3 {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+
+  .tl-preview-top p {
+    font-size: 12px;
+    color: var(--text-faint);
+    margin: 3px 0 0;
+  }
+
+  .tl-preview-img-wrap {
+    padding: 20px 24px;
+    background: #f4f5f7;
+    max-height: 60vh;
+    overflow-y: auto;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+  }
+
+  .tl-preview-img-wrap img {
+    width: 100%;
+    max-width: 860px;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+    display: block;
+  }
+
+  .tl-preview-actions {
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    border-top: 1px solid var(--border);
+  }
+
+  .tl-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 10px 18px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    border: none;
+    white-space: nowrap;
+  }
+
+  .tl-action-btn.secondary {
+    background: #f1f2f4;
+    color: var(--text-soft);
+  }
+
+  .tl-action-btn.secondary:hover {
+    background: #e8eaed;
+    color: var(--text);
+  }
+
+  .tl-action-btn.primary {
+    background: var(--text);
+    color: #ffffff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+  }
+
+  .tl-action-btn.primary:hover {
+    background: #2d3238;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.15);
+  }
+
+  .tl-action-btn svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .tl-coming-soon-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: #f0f2f5;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-faint);
+    letter-spacing: 0.03em;
+  }
+
+  .tl-coming-soon-chip::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #c98a4b;
+    flex-shrink: 0;
+  }
+
+  /* ── Saved-cards banner ───────────────────────────────────── */
+  .tl-saved-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 24px;
+    background: #eef5f0;
+    border-bottom: 1px solid #d4e9da;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #3a7d55;
+  }
+
+  .tl-saved-banner--warn {
+    background: #fef4e8;
+    border-color: #f3d9a8;
+    color: #925c1a;
+  }
+
+  .tl-banner-clear {
+    margin-left: auto;
+    background: none;
+    border: none;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--text-faint);
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 6px;
+    font-family: inherit;
+    transition: background 0.15s, color 0.15s;
+  }
+
+  .tl-banner-clear:hover {
+    background: rgba(0,0,0,0.06);
+    color: var(--text);
+  }
+
+  /* ── Saved cards gallery ──────────────────────────────────── */
+  .tl-saved-section {
+    padding: 16px 24px;
+    border-top: 1px solid var(--border);
+    background: #fafbfb;
+  }
+
+  .tl-saved-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11.5px;
+    font-weight: 700;
+    color: var(--text-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 12px;
+  }
+
+  .tl-saved-grid {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: thin;
+  }
+
+  .tl-saved-thumb {
+    flex-shrink: 0;
+    width: 160px;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    background: #fff;
+    position: relative;
+  }
+
+  .tl-saved-thumb img {
+    width: 100%;
+    display: block;
+    border-radius: 0;
+  }
+
+  .tl-saved-thumb-meta {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 8px 4px;
+    font-size: 10.5px;
+    color: var(--text-faint);
+    font-weight: 500;
+  }
+
+  .tl-saved-thumb-actions {
+    display: flex;
+    gap: 4px;
+    padding: 0 6px 6px;
+  }
+
+  .tl-thumb-dl,
+  .tl-thumb-del {
+    flex: 1;
+    background: #f1f2f4;
+    border: none;
+    border-radius: 7px;
+    padding: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s;
+  }
+
+  .tl-thumb-dl:hover  { background: #e3e5e9; }
+  .tl-thumb-del:hover { background: #fde8e8; }
+
+  .tl-thumb-dl svg,
+  .tl-thumb-del svg {
+    width: 12px;
+    height: 12px;
+    color: var(--text-soft);
+  }
+
+  .tl-thumb-del svg { color: var(--overdue); }
+</style>
+<link rel="stylesheet" href="CSS/dashboard.css">
+</head>
+<body>
+
+<!-- Global Application Loader Skeleton -->
+<div id="appInitLoader" class="skeleton-loader">
+  <img src="Academic OS Logo.png" style="width: 72px; margin-bottom: 16px;" alt="Academic OS Logo">
+  <div>Authenticating student terminal...</div>
+</div>
+
+<!-- STUNNING SECURITY PORTAL CONTAINER -->
+<div id="authPortal" class="auth-container">
+  <img src="Academic OS Logo.png" class="auth-logo" alt="Academic OS">
+  <div class="auth-title">BITS Pilani Student Terminal</div>
+
+  <!-- Google Auth Integration Hook -->
+  <button type="button" class="google-auth-btn" id="googleAuthBtn">
+    <svg class="google-icon" viewBox="0 0 24 24">
+      <path fill="#EA4335" d="M12 5.04c1.65 0 3.13.57 4.3 1.69l3.22-3.22C17.56 1.7 14.97 1 12 1 7.35 1 3.39 3.68 1.48 7.58l3.77 2.92C6.18 7.37 8.87 5.04 12 5.04z"/>
+      <path fill="#4285F4" d="M23.49 12.27c0-.81-.07-1.59-.2-2.35H12v4.51h6.44c-.28 1.47-1.11 2.71-2.36 3.55l3.68 2.85c2.15-1.98 3.39-4.9 3.39-8.56z"/>
+      <path fill="#FBBC05" d="M5.25 14.5c-.25-.76-.39-1.57-.39-2.41s.14-1.65.39-2.41L1.48 6.76C.68 8.35.21 10.12.21 12s.47 3.65 1.27 5.24l3.77-2.74z"/>
+      <path fill="#34A353" d="M12 23c3.24 0 5.95-1.08 7.93-2.91l-3.68-2.85c-1.02.68-2.33 1.09-4.25 1.09-3.13 0-5.82-2.33-6.77-5.46L1.48 16.6C3.39 20.32 7.35 23 12 23z"/>
+    </svg>
+    <span>Continue with Google</span>
+  </button>
+
+  <div id="authAlert" class="auth-alert"></div>
+
+    <div class="auth-domain-note">
+      <svg fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M2.166 4.9L10 1.154l7.834 3.746v5.33c0 4.673-3.193 8.877-7.834 10-4.64-1.123-7.834-5.327-7.834-10V4.9zM10 3.12L3.834 6.071v4.159c0 3.743 2.505 7.153 6.166 8.163a9.914 9.914 0 006.166-8.163V6.071L10 3.12zM9 7a1 1 0 112 0v4a1 1 0 11-2 0V7zm1-9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"></path></svg>
+      <div>Google sign-in is limited to official <strong>@bitspilani-digital.edu.in</strong> accounts.</div>
+    </div>
+
+</div>
+
+<div class="wrap hidden" id="trimesterChooser">
+  <header class="top">
+    <div class="brand-header">
+      <img src="Academic OS Logo.png" alt="Academic OS" class="brand-logo">
+      <div class="title-block">
+        <h1>MSc Data Science and AI Progress Tracker</h1>
+        <p>Choose a trimester to open your study tracker.</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <div class="user-badge" id="chooserUserBadge">student@bitspilani-digital.edu.in</div>
+      <button class="reset-btn logout" id="chooserSignOutBtn">Sign out</button>
+    </div>
+  </header>
+
+  <section class="trimester-picker" aria-labelledby="trimesterPickerTitle">
+    <div class="section-title" id="trimesterPickerTitle">Select your trimester</div>
+    <p class="trimester-picker-help">Choose one of the six trimester trackers.</p>
+    <div class="trimester-grid">
+      <button type="button" class="trimester-choice" data-trimester="1">
+        <span class="trimester-choice-name">Trimester 1</span>
+        <span class="trimester-choice-description">Existing study tracker · 4 courses</span>
+      </button>
+      <button type="button" class="trimester-choice" data-trimester="2">
+        <span class="trimester-choice-name">Trimester 2</span>
+        <span class="trimester-choice-description">Data Stores &amp; Pipeline handbook</span>
+      </button>
+      <button type="button" class="trimester-choice" data-trimester="3">
+        <span class="trimester-choice-name">Trimester 3</span>
+        <span class="trimester-choice-description">Curriculum not added yet</span>
+      </button>
+      <button type="button" class="trimester-choice" data-trimester="4">
+        <span class="trimester-choice-name">Trimester 4</span>
+        <span class="trimester-choice-description">Curriculum not added yet</span>
+      </button>
+      <button type="button" class="trimester-choice" data-trimester="5">
+        <span class="trimester-choice-name">Trimester 5</span>
+        <span class="trimester-choice-description">Curriculum not added yet</span>
+      </button>
+      <button type="button" class="trimester-choice" data-trimester="6">
+        <span class="trimester-choice-name">Trimester 6</span>
+        <span class="trimester-choice-description">Curriculum not added yet</span>
+      </button>
+    </div>
+  </section>
+</div>
+
+<!-- TRACKER CONTAINER -->
+<div class="wrap hidden" id="mainTrackerApp">
+
+  <header class="top">
+    <div class="brand-header">
+      <img src="Academic OS Logo.png" alt="Academic OS" class="brand-logo">
+      <div class="title-block">
+        <h1>MSc Data Science and AI Progress Tracker</h1>
+        <p id="activeTrimesterLabel">BITS Pilani, DSP-BITS Data Stores &amp; Pipeline Handbook</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <div id="syncStatus" class="sync-indicator">All metrics saved offline</div>
+      <div class="user-badge" id="userBadgeEmail">student@bitspilani-digital.edu.in</div>
+      <button class="reset-btn" id="lumenSyncBtn">Sync Lumen</button>
+      <button class="reset-btn" id="changeTrimesterBtn">Change trimester</button>
+      <button class="reset-btn logout" id="signOutBtn">Sign out</button>
+      <button class="reset-btn" id="resetBtn">Reset all progress</button>
+    </div>
+  </header>
+
+  <section class="admin-dashboard hidden" id="adminDashboard" aria-hidden="true">
+    <div class="admin-dashboard__toolbar">
+      <div>
+        <div class="section-title">Admin Cohort Dashboard</div>
+        <p data-admin-status class="admin-dashboard__status">Verifying admin access...</p>
+      </div>
+      <div class="admin-dashboard__actions">
+        <button type="button" data-admin-fullscreen class="reset-btn">Full screen</button>
+        <button type="button" data-admin-refresh class="reset-btn">Refresh cohort</button>
+      </div>
+    </div>
+
+    <div data-admin-summary class="admin-dashboard__summary"></div>
+
+    <div class="admin-dashboard__table-wrap">
+      <table class="admin-dashboard__table" aria-label="Cohort progress for signed up BITS students">
+        <thead>
+          <tr>
+            <th>Student</th>
+            <th>Modules</th>
+            <th>Attendance</th>
+            <th>Quiz Avg</th>
+            <th>Assignment Avg</th>
+            <th>Study Hrs</th>
+            <th>Consistency</th>
+            <th>Aptitude</th>
+            <th>GPA</th>
+            <th>Communication</th>
+            <th>Projects</th>
+            <th>Internships</th>
+            <th>Mock Interviews</th>
+            <th>Backlogs</th>
+            <th>Placement</th>
+            <th>Updated</th>
+          </tr>
+        </thead>
+        <tbody data-admin-table></tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="summary-grid" id="summaryGrid"></div>
+
+  <div class="analytics-section" id="analyticsSection">
+    <div class="section-title">Learning Analytics</div>
+    <div class="analytics-grid">
+      <div class="chart-card">
+        <canvas id="courseProgressChart"></canvas>
+      </div>
+      <div class="chart-card">
+        <canvas id="weeklyCompletionChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="prediction-section" id="predictionSection">
+    <div class="section-title">Prediction</div>
+    <div class="prediction-grid" id="predictionGrid"></div>
+  </div>
+
+  <!-- Post to Timeline bar -->
+  <div class="timeline-post-bar" id="timelinePostBar">
+    <div class="tl-label">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 21V9"/>
+      </svg>
+      Snapshot your progress and share it when the timeline launches.
+    </div>
+    <button class="post-timeline-btn" id="postTimelineBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>
+      </svg>
+      Post to Timeline
+    </button>
+  </div>
+
+  <!-- Off-screen card that html2canvas renders -->
+  <div id="tlSnapshotCard" aria-hidden="true"></div>
+
+  <div class="filter-row" id="filterRow"></div>
+
+  <div id="courseContainer"></div>
+
+  <div class="deadline-section" id="deadlineSection">
+    <div class="section-title">Upcoming and recent deadlines</div>
+    <div class="deadline-grid" id="deadlineGrid"></div>
+  </div>
+
+  <footer class="bottom">
+    <div><a href="privacy-and-legal.html">Privacy &amp; Legal</a></div>
+    <div style="margin-top:8px;">Progress metrics successfully synchronized to your student cloud.</div>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="dsp_bits_curriculum.js"></script>
+<script src="js/lumen.js"></script>
+<script src="js/sync.js"></script>
+<script>
+  // ---------- DATA ----------
+  const TODAY = new Date('2026-06-20');
+
+  // Existing four-course curriculum, now assigned to Trimester 1.
+  const TRIMESTER_1_COURSES = [
+    {
+      id: 'sm',
+      name: 'Statistical Modelling and Inferencing',
+      color: 'var(--sm-color)',
+      bg: 'var(--sm-bg)',
+      credits: '3 credits, 13 weeks',
+      weeks: [
+        { n: 1, date: '2026-05-23', topic: 'Basic Probability and Statistics', syllabus: ['Revision of basic probability', 'Random variables and distributions', 'Parametric vs non parametric', 'Population vs sample, central tendency'] },
+        { n: 2, date: '2026-05-30', topic: 'Introduction to Statistical Inference', syllabus: ['The art of sampling', 'Point estimation', 'Properties of estimators', 'Central limit theorem', 'Simple random and stratified sampling'] },
+        { n: 3, date: '2026-06-06', topic: 'Estimation and Hypothesis Testing', syllabus: ['Interval estimation of mean', 'Determining sample size', 'Hypothesis testing framework, errors and p values', 'One sample tests, Z and T', 'Quiz 1 covers weeks 1 to 3, weightage 15%'] },
+        { n: 4, date: '2026-06-13', topic: 'Hypothesis Testing, continued', syllabus: ['Inferences for two population means', 'Inferences for two population variances', 'Testing population proportions', 'Chi square test of independence', 'A/B testing case study'] },
+        { n: 5, date: '2026-06-20', topic: 'Analysis of Variance (ANOVA)', syllabus: ['Experimental design and ANOVA', 'One way ANOVA', 'Between group vs within group variance', 'F statistic calculation', 'Tukey HSD post hoc testing'] },
+        { n: 6, date: '2026-06-27', topic: 'Simple Linear Regression', syllabus: ['Least squares method', 'Coefficient of determination, R squared', 'Significance testing, F and T', 'Residual analysis', 'Quiz 2 covers weeks 4 to 6, weightage 15%'] },
+        { n: 7, date: '2026-07-04', topic: 'Multiple Regression', syllabus: ['The multiple regression model', 'Least squares in multiple regression', 'Adjusted R squared', 'Significance testing', 'Multicollinearity'] },
+        { n: 8, date: '2026-07-11', topic: 'Forecasting and Time Series Analysis', syllabus: ['Time series components', 'Smoothing methods, moving averages', 'Exponential smoothing', 'Trend and seasonal components'] },
+        { n: 9, date: '2026-07-18', topic: 'Factor and Cluster Analysis', syllabus: ['What is factor analysis', 'Conditions for factor analysis', 'PCA vs factor analysis', 'Interpreting the output'] },
+        { n: 10, date: '2026-07-25', topic: 'Cluster Analysis', syllabus: ['Hierarchical clustering', 'K means clustering', 'Choosing the number of clusters K', 'Take home assignment covers weeks 1 to 10, weightage 20%'] },
+        { n: 11, date: '2026-08-01', topic: 'Maximum Likelihood Methods', syllabus: ['Intuition of maximum likelihood', 'The likelihood function', 'Finding the MLE', 'Properties of MLEs', 'Quiz 3 covers weeks 7 to 11, weightage 15%'] },
+        { n: 12, date: '2026-08-08', topic: 'Logistic Regression', syllabus: ['Linear probability model', 'Probit and logit models', 'Interpreting logit coefficients', 'Odds ratios'] },
+        { n: 13, date: '2026-08-15', topic: 'Introduction to Bayesian Inference, Final Exam', syllabus: ['The Bayesian philosophy', 'End of trimester exam covers weeks 1 to 13, weightage 35%'] }
+      ]
+    },
+    {
+      id: 'dp',
+      name: 'Data Preprocessing',
+      color: 'var(--dp-color)',
+      bg: 'var(--dp-bg)',
+      credits: '2 credits, 8 weeks',
+      weeks: [
+        { n: 1, date: '2026-05-22', topic: 'Introduction to Data Science', syllabus: ['Foundations of data science', 'Knowledge Discovery in Databases process', 'Predictive vs descriptive data mining', 'Applications of data mining methods'] },
+        { n: 2, date: '2026-05-29', topic: 'Data, attribute types and representation', syllabus: ['What is a dataset', 'Types of attributes', 'Data representation methods', 'Lab, setting up Colab, intro to pandas and matplotlib'] },
+        { n: 3, date: '2026-06-05', topic: 'Data Quality and Issues', syllabus: ['Understanding data quality', 'Noise vs outliers', 'Missing values vs duplicate data', 'Data integrity challenges'] },
+        { n: 4, date: '2026-06-12', topic: 'Data Cleaning', syllabus: ['Handling missing values', 'Dealing with noisy data', 'Outlier detection and management', 'Inconsistent data', 'Lab, fixing missing data and removing outliers'] },
+        { n: 5, date: '2026-06-19', topic: 'Data Transformation and Aggregation', syllabus: ['Normalization techniques', 'Standardization', 'Data aggregation', 'Data integration for consistency', 'Lab, normalization and aggregation techniques'] },
+        { n: 6, date: '2026-06-26', topic: 'Data Reduction', syllabus: ['Data sampling', 'Attribute subset selection', 'Feature creation', 'Lab, PCA for dimensionality reduction'] },
+        { n: 7, date: '2026-07-03', topic: 'Proximity Measures', syllabus: ['Nominal, binary, numerical attributes', 'Ordinal and mixed attributes', 'Advanced similarity measures', 'Lab, proximity analysis on different attribute types'] },
+        { n: 8, date: '2026-07-10', topic: 'Data Explainability, SHAP and LIME', syllabus: ['Data distribution analysis', 'Feature importance', 'Explainability in practice', 'Lab, SHAP and LIME walkthrough'] }
+      ]
+    },
+    {
+      id: 'fe',
+      name: 'Feature Engineering',
+      color: 'var(--fe-color)',
+      bg: 'var(--fe-bg)',
+      credits: '2 credits, 8 weeks',
+      weeks: [
+        { n: 1, date: '2026-06-20', topic: 'Overview of Feature Engineering', syllabus: ['Role and purpose of feature engineering', 'Feature importance, illustrative examples', 'Challenges of high dimensional data', 'General techniques overview'] },
+        { n: 2, date: '2026-06-27', topic: 'Handling Numeric Data', syllabus: ['Discretization of continuous features', 'Min max, standardization, robust scaling', 'Smoothing methods', 'Log, polynomial and power transformations'] },
+        { n: 3, date: '2026-07-04', topic: 'General Feature Engineering Techniques', syllabus: ['Feature extraction and construction', 'Filter based selection, correlation and chi square', 'Wrapper methods, SFS and SBS', 'Embedded feature selection'] },
+        { n: 4, date: '2026-07-11', topic: 'Dimensionality Reduction (PCA, SVD, t-SNE)', syllabus: ['PCA concepts and applications', 'SVD for compression and noise reduction', 't-SNE for nonlinear reduction and visualization', 'Graded quiz at end of week'] },
+        { n: 5, date: '2026-07-18', topic: 'Feature Engineering for Text Data', syllabus: ['Unigrams, n-grams, Bag of Words, TF-IDF', 'Word embeddings and one hot encoding', 'POS tagging and linguistic enrichment', 'Assignment opens this week'] },
+        { n: 6, date: '2026-07-25', topic: 'Feature Engineering for Image Data', syllabus: ['Fundamentals of image representation', 'Edge detection techniques', 'Corner detection methods', 'Histogram of Oriented Gradients, HoG'] },
+        { n: 7, date: '2026-08-01', topic: 'Feature Engineering for Time Series Data', syllabus: ['Lag features, rolling statistics, window features', 'Heart rate variability, moving averages, RSI, Bollinger Bands', 'Effect of engineered features on forecasting accuracy'] },
+        { n: 8, date: '2026-08-08', topic: 'Automated Feature Engineering', syllabus: ['Deep Feature Synthesis with Featuretools', 'Automated time series extraction with TSFresh', 'Feature selection with Featurewiz', 'Integrating automated tools into ML workflows'] }
+      ]
+    },
+    {
+      id: 'dv',
+      name: 'Data Visualization and Storytelling',
+      color: 'var(--dv-color)',
+      bg: 'var(--dv-bg)',
+      credits: '3 credits, 13 weeks',
+      weeks: [
+        { n: 1, date: '2026-05-22', topic: 'Introduction to Visualization', syllabus: ['Need to visualize data', 'Seven stages of data visualization', 'Comparison, distribution, composition, relationship charts', 'Exploratory vs explanatory analysis'] },
+        { n: 2, date: '2026-05-29', topic: 'Taxonomy of Data Visualization Methods', syllabus: ['Choosing an effective visual', 'Lessons in storytelling', 'Hierarchies and part to whole relationships', 'Showing change over time, plotting relationships, geo spatial data'] },
+        { n: 3, date: '2026-06-05', topic: 'Effective Visuals Design', syllabus: ['Cognitive load and clutter', 'Gestalt principles of visual medium', 'Pre attentive attributes in text, tables and graphs', 'Strategic use of color'] },
+        { n: 4, date: '2026-06-12', topic: 'Visual Best Practices, numerical and text data', syllabus: ['Edward Tufte visual encoding', 'Choosing the right chart for structured data', 'Word clouds, scatterplots, histograms for text', 'Topic models and word embeddings'] },
+        { n: 5, date: '2026-06-19', topic: 'Dashboards', syllabus: ['Types and characteristics of dashboards', 'Common mistakes in dashboard design', 'Visual design process', 'Designing dashboards for usability'] },
+        { n: 6, date: '2026-06-26', topic: 'Visual Storytelling', syllabus: ['Why storytelling matters', 'Author driven vs reader driven narratives', 'Seven story types', 'Misleading with charts'] },
+        { n: 7, date: '2026-07-03', topic: 'Python Matplotlib', syllabus: ['Matplotlib basics and getting started', 'Plot styles and types', 'Advanced matplotlib'] },
+        { n: 8, date: '2026-07-10', topic: 'Python Matplotlib, continued', syllabus: ['Plotting from a database and CSV', 'Plotting data from the web', 'Plotting geographical data', 'Curve fitting and extrapolation'] },
+        { n: 9, date: '2026-07-17', topic: 'Python Seaborn', syllabus: ['Seaborn vs matplotlib', 'Statistical relationships', 'Categorical, univariate, bivariate distributions', 'Seaborn linear regression models'] },
+        { n: 10, date: '2026-07-24', topic: 'Python Bokeh', syllabus: ['Bokeh building blocks and glyphs', 'Simple plots and different data structures', 'Decorating visuals', 'Interactive server side applications'] },
+        { n: 11, date: '2026-07-31', topic: 'Tableau', syllabus: ['Tableau ecosystem and desktop basics', 'Data connections and metadata management', 'Data extracts, joins and blending'] },
+        { n: 12, date: '2026-08-07', topic: 'Tableau, continued', syllabus: ['Visual analysis, sorting, grouping', 'Building an advanced dashboard', 'Tableau stories'] },
+        { n: 13, date: '2026-08-14', topic: 'Power BI and Google Data Studio', syllabus: ['Google Data Studio, connect and visualize', 'Power BI data connections', 'Dashboard design and sharing'] }
+      ]
+    }
+  ];
+
+  const TRIMESTER_1_DEADLINES = [
+    { date: '2026-06-09', title: 'Quiz 1 deadline', sub: 'Data Preprocessing, Statistical Modelling, Data Visualization' },
+    { date: '2026-06-30', title: 'Quiz 2 deadline', sub: 'Data Preprocessing, Statistical Modelling, Data Visualization, and Feature Engineering Quiz 1' },
+    { date: '2026-07-21', title: 'Quiz 3 deadline', sub: 'Statistical Modelling, Data Visualization, and Feature Engineering Quiz 2' },
+    { date: '2026-08-08', title: 'Assignment deadline, all 4 courses', sub: 'Data Preprocessing, Statistical Modelling, Data Visualization, Feature Engineering' }
+  ];
+
+  const TRIMESTERS = [
+    { id: 1, name: 'Trimester 1', description: 'Existing study tracker · 4 courses', courses: TRIMESTER_1_COURSES, deadlines: TRIMESTER_1_DEADLINES },
+    { id: 2, name: 'Trimester 2', description: 'Data Stores & Pipeline handbook', courses: DSP_BITS_COURSES, deadlines: DSP_BITS_DEADLINES },
+    { id: 3, name: 'Trimester 3', description: 'Curriculum not added yet', courses: [], deadlines: [] },
+    { id: 4, name: 'Trimester 4', description: 'Curriculum not added yet', courses: [], deadlines: [] },
+    { id: 5, name: 'Trimester 5', description: 'Curriculum not added yet', courses: [], deadlines: [] },
+    { id: 6, name: 'Trimester 6', description: 'Curriculum not added yet', courses: [], deadlines: [] }
+  ];
+
+  let currentTrimester = null;
+  let COURSES = [];
+  let DEADLINES = [];
+
+  // ---------- FIREBASE OR MOCK INITIALIZATION ----------
+  const LOCAL_OFFLINE_KEY = 'dsp_bits_tracker_progress_v1';
+  const LEGACY_OFFLINE_KEY = 'msc_tracker_progress_v2';
+  const PRIVATE_STORE_KEY = 'dsp_bits_tracker_cloud_sync_v1';
+  const BACKEND_API_URL = "https://academic-os-api.onrender.com";
+
+  let db   = null;
+  let auth = null;
+  let appId = 'dsp-bits-tracker';
+  let isFirebaseConfigured = false;
+
+  // Initialize Firebase directly — config is not a secret (security enforced by Firebase rules)
+  try {
+    const firebaseConfig = {
+      apiKey:            "AIzaSyCTNPwLzpWNUI7ltQFJtv_E4W3oZQWnflQ",
+      authDomain:        "bits-dsai-tracker.firebaseapp.com",
+      projectId:         "bits-dsai-tracker",
+      storageBucket:     "bits-dsai-tracker.firebasestorage.app",
+      messagingSenderId: "530627005818",
+      appId:             "1:530627005818:web:24ca6180f9ed9e2fcbdac3",
+    };
+    firebase.initializeApp(firebaseConfig);
+    auth = firebase.auth();
+    db   = firebase.firestore();
+    isFirebaseConfigured = true;
+    console.log("Firebase initialised — project: bits-dsai-tracker");
+  } catch (err) {
+    console.warn("Firebase init failed, falling back to offline simulation.", err);
+  }
+
+  // Simulated Database Fallback to allow complete functionality instantly inside plain environments
+  const simulatedDB = {
+    activeSession: JSON.parse(localStorage.getItem('simulated_session') || 'null'),
+    progressStore: JSON.parse(localStorage.getItem('simulated_firestore_db') || '{}'),
+    
+    save() {
+      localStorage.setItem('simulated_session', JSON.stringify(this.activeSession));
+      localStorage.setItem('simulated_firestore_db', JSON.stringify(this.progressStore));
+    }
+  };
+
+  // ---------- TRACKER STATE ----------
+  let progress = {};
+  let liveLumenPayload = null;
+  let extensionBridgeReady = false;
+  let activeFilter = 'all';
+  let openSections = {};
+  let currentUser = null;
+  let isAuthLoading = true;
+  let legacyProgressMigrationPending = false;
+
+  // ---------- INITIALIZE APP & AUTH LISTENERS ----------
+  window.onload = async function() {
+    setupAuthDOMListeners();
+    if (window.AcademicOSBridge?.initialize) {
+    window.AcademicOSBridge.initialize();
+}
+    
+    if (isFirebaseConfigured) {
+      // Rule 3: Auth first. Listen to changes
+      auth.onAuthStateChanged(async (user) => {
+        isAuthLoading = false;
+        document.getElementById('appInitLoader').classList.add('hidden');
+        
+        if (user) {
+          const email = user.email || "";
+          if (isAuthorizedGoogleUser(user)) {
+            currentUser = user;
+            await initializeUserDashboard(user);
+          } else {
+            currentUser = null;
+            const message = isValidBitsEmail(email)
+              ? "Please sign in with your official BITS Google account."
+              : "Only @bitspilani-digital.edu.in Google accounts are permitted.";
+            showAuthAlert(message, "error");
+            await auth.signOut();
+            showAuthPortal();
+          }
+        } else {
+          currentUser = null;
+          showAuthPortal();
+        }
+      });
+    } else {
+      // Simulation Authentication State Loop
+      setTimeout(async () => {
+        isAuthLoading = false;
+        document.getElementById('appInitLoader').classList.add('hidden');
+        
+        if (simulatedDB.activeSession?.uid?.startsWith('google_sim_') && isValidBitsEmail(simulatedDB.activeSession.email)) {
+          currentUser = simulatedDB.activeSession;
+          await initializeUserDashboard(currentUser);
+        } else {
+          simulatedDB.activeSession = null;
+          simulatedDB.save();
+          showAuthPortal();
+        }
+      }, 700);
+    }
+  };
+
+  // ---------- DOMAIN VERIFICATION GATES ----------
+  function isValidBitsEmail(email) {
+    const rx = /^[a-zA-Z0-9._%+-]+@bitspilani-digital\.edu\.in$/i;
+    return rx.test(email);
+  }
+
+  function isAuthorizedGoogleUser(user) {
+    return isValidBitsEmail(user?.email || '') &&
+      (user?.providerData || []).some(profile => profile.providerId === 'google.com');
+  }
+
+  // ---------- GOOGLE SIGN-IN CONTROLLER ----------
+  function setupAuthDOMListeners() {
+    const googleAuthBtn = document.getElementById('googleAuthBtn');
+
+    // Google Sign-In click listener
+    googleAuthBtn.addEventListener('click', async () => {
+      hideAuthAlert();
+      setAuthLoadingState(true);
+      
+      if (isFirebaseConfigured) {
+        const provider = new firebase.auth.GoogleAuthProvider();
+        // Force domain on Google login select window if possible
+        provider.setCustomParameters({
+          hd: 'bitspilani-digital.edu.in'
+        });
+        
+        try {
+          const result = await auth.signInWithPopup(provider);
+          const user = result.user;
+          
+          if (!isAuthorizedGoogleUser(user)) {
+            showAuthAlert("Access denied. Sign in with an official @bitspilani-digital.edu.in Google account.", "error");
+            await auth.signOut();
+          }
+        } catch (error) {
+          console.error("Google Auth failed: ", error);
+          showAuthAlert("Google Authentication failed: " + error.message, "error");
+          setAuthLoadingState(false);
+        }
+      } else {
+        // --- Simulated Interactive Google Account Picker ---
+        // Generates a mock selection overlay to test domain logic inside environments without Firebase keys
+        const picker = document.createElement('div');
+        picker.setAttribute('style', `
+          position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+          background: rgba(15, 23, 42, 0.5); backdrop-filter: blur(4px);
+          display: flex; align-items: center; justify-content: center;
+          z-index: 10000; font-family: 'Inter', sans-serif;
+        `);
+        picker.innerHTML = `
+          <div style="background: white; width: 100%; max-width: 400px; padding: 28px; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); text-align: left;">
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:18px;">
+              <svg style="width:18px; height:18px;" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M23.49 12.27c0-.81-.07-1.59-.2-2.35H12v4.51h6.44c-.28 1.47-1.11 2.71-2.36 3.55l3.68 2.85c2.15-1.98 3.39-4.9 3.39-8.56z"/>
+                <path fill="#34A353" d="M12 23c3.24 0 5.95-1.08 7.93-2.91l-3.68-2.85c-1.02.68-2.33 1.09-4.25 1.09-3.13 0-5.82-2.33-6.77-5.46L1.48 16.6C3.39 20.32 7.35 23 12 23z"/>
+                <path fill="#FBBC05" d="M5.25 14.5c-.25-.76-.39-1.57-.39-2.41s.14-1.65.39-2.41L1.48 6.76C.68 8.35.21 10.12.21 12s.47 3.65 1.27 5.24l3.77-2.74z"/>
+                <path fill="#EA4335" d="M12 5.04c1.65 0 3.13.57 4.3 1.69l3.22-3.22C17.56 1.7 14.97 1 12 1 7.35 1 3.39 3.68 1.48 7.58l3.77 2.92C6.18 7.37 8.87 5.04 12 5.04z"/>
+              </svg>
+              <span style="font-weight: 700; font-size: 16px; color: #1f2328;">Sign in with Google</span>
+            </div>
+            <p style="font-size: 13px; color: var(--text-soft); line-height: 1.5; margin-bottom: 20px;">Choose a Google account to simulate the callback authentication trigger:</p>
+            
+            <!-- Account 1: Authorized -->
+            <button class="mock-g-acc" data-email="ananya.sharma@bitspilani-digital.edu.in" data-name="Ananya Sharma" style="display:flex; align-items:center; gap:12px; width:100%; padding:12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; margin-bottom:10px; cursor:pointer; text-align:left; transition:background 0.15s;">
+              <div style="background:#4f7cac; color:white; width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px;">AS</div>
+              <div>
+                <div style="font-weight:600; font-size:13px; color:#1f2328;">Ananya Sharma</div>
+                <div style="font-size:11px; color:#64748b;">ananya.sharma@bitspilani-digital.edu.in</div>
+              </div>
+            </button>
+
+            <!-- Account 2: Unauthorized -->
+            <button class="mock-g-acc" data-email="ananya.sharma@gmail.com" data-name="Ananya Personal" style="display:flex; align-items:center; gap:12px; width:100%; padding:12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; margin-bottom:20px; cursor:pointer; text-align:left; transition:background 0.15s;">
+              <div style="background:#64748b; color:white; width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px;">AP</div>
+              <div>
+                <div style="font-weight:600; font-size:13px; color:#1f2328;">Ananya Sharma (Personal)</div>
+                <div style="font-size:11px; color:#64748b;">ananya.sharma@gmail.com</div>
+              </div>
+            </button>
+
+            <div style="display:flex; justify-content:flex-end;">
+              <button id="cancelMockG" style="background:none; border:none; padding:8px 16px; font-weight:600; color:var(--text-soft); font-size:13px; cursor:pointer;">Cancel</button>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(picker);
+
+        // Click handlers on mock selector cards
+        picker.querySelectorAll('.mock-g-acc').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const email = btn.dataset.email;
+            const name = btn.dataset.name;
+            document.body.removeChild(picker);
+
+            if (!isValidBitsEmail(email)) {
+              showAuthAlert("Access Denied! Google account " + email + " is unauthorized. Only @bitspilani-digital.edu.in email addresses are permitted.", "error");
+              setAuthLoadingState(false);
+              return;
+            }
+
+            // Valid simulated session active
+            const mockUid = 'google_sim_' + Math.random().toString(36).substr(2, 9);
+            simulatedDB.activeSession = { uid: mockUid, email: email, displayName: name };
+            simulatedDB.save();
+            currentUser = simulatedDB.activeSession;
+            await initializeUserDashboard(currentUser);
+          });
+        });
+
+        picker.querySelector('#cancelMockG').addEventListener('click', () => {
+          document.body.removeChild(picker);
+          setAuthLoadingState(false);
+        });
+      }
+    });
+
+    document.querySelectorAll('.trimester-choice').forEach(button => {
+      button.addEventListener('click', () => selectTrimester(Number(button.dataset.trimester)));
+    });
+
+    document.getElementById('changeTrimesterBtn').addEventListener('click', showTrimesterChooser);
+    document.getElementById('chooserSignOutBtn').addEventListener('click', signOutCurrentUser);
+
+    // Reset Progress Metrics Trigger
+    document.getElementById('resetBtn').addEventListener('click', async () => {
+      const confirmReset = await showCustomConfirm("Are you sure you want to reset all tracking progress on this account? This will clear your modules checklist on the Cloud.");
+      if (confirmReset) {
+        progress = {};
+        localStorage.removeItem(LOCAL_OFFLINE_KEY);
+        localStorage.removeItem(LEGACY_OFFLINE_KEY);
+        await syncProgressToCloud();
+        render();
+      }
+    });
+
+    document.getElementById('lumenSyncBtn').addEventListener('click', async () => {
+      if (window.AcademicOSBridge?.requestFreshProgress) {
+    window.AcademicOSBridge.requestFreshProgress();
+}
+      await syncProgressFromLumen({ interactive: true });
+    });
+
+    // Sign out trigger
+    document.getElementById('signOutBtn').addEventListener('click', signOutCurrentUser);
+  }
+
+  async function signOutCurrentUser() {
+    setAuthLoadingState(false);
+    hideAuthAlert();
+
+    if (isFirebaseConfigured) {
+      await auth.signOut();
+    } else {
+      simulatedDB.activeSession = null;
+      simulatedDB.save();
+      currentUser = null;
+      showAuthPortal();
+    }
+  }
+
+  function setAuthLoadingState(loading) {
+    const btn = document.getElementById('googleAuthBtn');
+    btn.disabled = loading;
+    btn.style.opacity = loading ? '0.7' : '1';
+    btn.querySelector('span').innerText = loading ? 'Signing in...' : 'Continue with Google';
+  }
+
+  function showAuthAlert(msg, type) {
+    const alertBox = document.getElementById('authAlert');
+    alertBox.className = `auth-alert ${type}`;
+    alertBox.innerText = msg;
+  }
+
+  function hideAuthAlert() {
+    const alertBox = document.getElementById('authAlert');
+    alertBox.style.display = 'none';
+  }
+
+  function showAuthPortal() {
+    document.getElementById('mainTrackerApp').classList.add('hidden');
+    document.getElementById('trimesterChooser').classList.add('hidden');
+    const portal = document.getElementById('authPortal');
+    portal.style.display = 'block';
+    setAuthLoadingState(false);
+  }
+
+  function showTrimesterChooser() {
+    document.getElementById('authPortal').style.display = 'none';
+    document.getElementById('mainTrackerApp').classList.add('hidden');
+    document.getElementById('trimesterChooser').classList.remove('hidden');
+  }
+
+  async function selectTrimester(trimesterId) {
+    const trimester = TRIMESTERS.find(item => item.id === trimesterId);
+    if (!trimester) return;
+
+    currentTrimester = trimester;
+    COURSES = trimester.courses;
+    DEADLINES = trimester.deadlines;
+    activeFilter = 'all';
+    openSections = {};
+    COURSES.forEach(course => openSections[course.id] = true);
+
+    const label = document.getElementById('activeTrimesterLabel');
+    label.textContent = trimester.id === 1
+      ? 'Trimester 1 · Existing study tracker'
+      : trimester.id === 2
+        ? 'Trimester 2 · Data Stores & Pipeline'
+        : trimester.name;
+
+    document.getElementById('trimesterChooser').classList.add('hidden');
+    document.getElementById('mainTrackerApp').classList.remove('hidden');
+
+    if (!COURSES.length) {
+      setSyncState(`${trimester.name} curriculum not added yet`, false);
+      render();
+      return;
+    }
+
+    setSyncState('Loading trimester progress...', true);
+    if (window.AcademicOSBridge?.requestCachedProgress) {
+      window.AcademicOSBridge.requestCachedProgress();
+    }
+    await syncProgressFromLumen({ interactive: false });
+    render();
+  }
+
+  // ---------- USER DASHBOARD LOADER & DATA MIGRATION ----------
+  async function initializeUserDashboard(user) {
+    document.getElementById('authPortal').style.display = 'none';
+    document.getElementById('mainTrackerApp').classList.add('hidden');
+    document.getElementById('trimesterChooser').classList.remove('hidden');
+    const trimesterChoices = Array.from(document.querySelectorAll('.trimester-choice'));
+    const pickerHelp = document.querySelector('.trimester-picker-help');
+    trimesterChoices.forEach(button => button.disabled = true);
+    pickerHelp.textContent = 'Loading your saved progress...';
+    
+    const displayName = user.displayName || (user.email ? user.email.split('@')[0] : 'Authorized Student');
+    document.getElementById('userBadgeEmail').innerText = displayName;
+    document.getElementById('userBadgeEmail').title = user.email || displayName;
+    document.getElementById('chooserUserBadge').innerText = displayName;
+    document.getElementById('chooserUserBadge').title = user.email || displayName;
+
+    setSyncState("Fetching Cloud metrics...", true);
+    progress = await fetchUserProgressFromCloud(user.uid);
+    const migratedKeys = [];
+    for (const storageKey of [LEGACY_OFFLINE_KEY, LOCAL_OFFLINE_KEY]) {
+      const offlineProgressRaw = localStorage.getItem(storageKey);
+      if (!offlineProgressRaw) continue;
+      try {
+        const offlineProgress = JSON.parse(offlineProgressRaw);
+        const mergedProgress = mergeProgress(progress, offlineProgress);
+        if (JSON.stringify(mergedProgress) !== JSON.stringify(progress)) {
+          progress = mergedProgress;
+          migratedKeys.push(storageKey);
+        }
+      } catch (e) {
+        console.warn(`Offline migration parse warning for ${storageKey}:`, e);
+      }
+    }
+
+    let progressSyncFailed = false;
+    if (legacyProgressMigrationPending || migratedKeys.length) {
+      const progressSaved = await syncProgressToCloud();
+      if (progressSaved) migratedKeys.forEach(storageKey => localStorage.removeItem(storageKey));
+      else progressSyncFailed = true;
+    }
+
+    if (!progressSyncFailed) setSyncState("Cloud synced", false);
+    pickerHelp.textContent = 'Choose one of the six trimester trackers.';
+    trimesterChoices.forEach(button => button.disabled = false);
+  }
+
+  // ---------- LUMEN LMS DATALAYER ----------
+  async function getFirebaseAuthHeaders() {
+    if (!isFirebaseConfigured || !auth.currentUser) return {};
+    const token = await auth.currentUser.getIdToken();
+    return { Authorization: `Bearer ${token}` };
+  }
+
+  async function syncProgressFromLumen({ interactive = false } = {}) {
+    if (!currentUser) return false;
+
+    setSyncState("Fetching Lumen progress...", true);
+    const params = new URLSearchParams({ student_id: currentUser.uid });
+
+    const devToken = localStorage.getItem('lumen_access_token');
+    const devUserId = localStorage.getItem('lumen_user_id');
+    if (devToken) params.set('access_token', devToken);
+    if (devUserId) params.set('lms_user_id', devUserId);
+
+    try {
+      const response = await fetch(`${BACKEND_API_URL}/api/lumen/progress?${params.toString()}`, {
+        headers: await getFirebaseAuthHeaders()
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        const detail = payload.detail || {};
+        if (response.status === 403 && detail.connect_url) {
+          setSyncState("Lumen connection required", false);
+          if (interactive) window.location.href = detail.connect_url;
+          return false;
+        }
+        throw new Error(detail.message || detail || "Lumen sync failed");
+      }
+
+      liveLumenPayload = payload;
+      const lmsProgress = mapLumenPayloadToTrackerProgress(payload);
+      progress = mergeProgress(progress, lmsProgress);
+      await syncProgressToCloud();
+      setSyncState("Live Lumen progress synced", false);
+      return true;
+    } catch (err) {
+      console.warn("Lumen sync unavailable; using saved tracker progress.", err);
+      setSyncState(interactive ? "Lumen sync failed" : "Using saved tracker metrics", false);
+      return false;
+    }
+  }
+
+  function mapLumenPayloadToTrackerProgress(payload) {
+    const mapped = {};
+    const courses = Array.isArray(payload.courses) ? payload.courses : [];
+
+    courses.forEach(lmsCourse => {
+      const localCourse = matchLocalCourse(lmsCourse);
+      if (!localCourse) return;
+
+      const totalUnits = countCourseUnits(localCourse);
+      const pct = Number(lmsCourse.overall_progress_pct || 0);
+      const completedUnits = Number.isFinite(pct)
+        ? Math.round((Math.max(0, Math.min(100, pct)) / 100) * totalUnits)
+        : Number(lmsCourse.modules_completed || 0);
+
+      mapped[localCourse.id] = markFirstUnitsCompleted(localCourse, completedUnits);
+    });
+
+    return mapped;
+  }
+
+  function matchLocalCourse(lmsCourse) {
+    const haystack = `${lmsCourse.course_name || ''} ${lmsCourse.course_code || ''}`.toLowerCase();
+    return COURSES.find(course => {
+      const name = course.name.toLowerCase();
+      const initials = course.name.split(/\s+/).map(word => word[0]).join('').toLowerCase();
+      return haystack.includes(name)
+        || haystack.includes(course.id.toLowerCase())
+        || haystack.includes(initials)
+        || name.split(/\s+/).filter(word => word.length > 3).some(word => haystack.includes(word));
+    });
+  }
+
+  function countCourseUnits(course) {
+    return course.weeks.reduce((sum, week) => sum + getWeekModulesCount(course, week), 0);
+  }
+
+  function markFirstUnitsCompleted(course, completedUnits) {
+    const courseProgress = {};
+    let remaining = Math.max(0, completedUnits);
+
+    course.weeks.forEach(week => {
+      const count = getWeekModulesCount(course, week);
+      courseProgress[week.n] = {};
+      for (let idx = 0; idx < count; idx++) {
+        courseProgress[week.n][idx] = remaining > 0;
+        remaining -= 1;
+      }
+    });
+
+    return courseProgress;
+  }
+
+  function mergeProgress(savedProgress, lmsProgress) {
+    const merged = JSON.parse(JSON.stringify(savedProgress || {}));
+    Object.keys(lmsProgress || {}).forEach(courseId => {
+      if (!merged[courseId]) merged[courseId] = {};
+      Object.keys(lmsProgress[courseId]).forEach(weekN => {
+        if (!merged[courseId][weekN]) merged[courseId][weekN] = {};
+        Object.keys(lmsProgress[courseId][weekN]).forEach(modIdx => {
+          if (lmsProgress[courseId][weekN][modIdx]) {
+            merged[courseId][weekN][modIdx] = true;
+          }
+        });
+      });
+    });
+    return merged;
+  }
+
+  // ---------- CLOUD FIRESTORE DATALAYER ----------
+  async function fetchUserProgressFromCloud(userId) {
+    legacyProgressMigrationPending = false;
+    if (isFirebaseConfigured) {
+      try {
+        if (!auth.currentUser) return {};
+        const docRef = db.doc(`artifacts/${appId}/users/${userId}/progress/trackerData`);
+        const snapshot = await docRef.get();
+        const payload = snapshot.exists ? snapshot.data() : {};
+        let savedProgress = payload.progress || {};
+
+        if (payload.legacyProgressImported !== true) {
+          legacyProgressMigrationPending = true;
+          try {
+            const legacyDocRef = db.doc(`artifacts/msc-dsai-tracker/users/${userId}/progress/trackerData`);
+            const legacySnapshot = await legacyDocRef.get();
+            if (legacySnapshot.exists) {
+              const legacyPayload = legacySnapshot.data();
+              savedProgress = mergeProgress(savedProgress, legacyPayload.progress || {});
+            }
+          } catch (legacyErr) {
+            console.warn("Legacy tracker progress could not be imported.", legacyErr);
+          }
+        }
+        return savedProgress;
+      } catch (err) {
+        console.error("Firestore loading failure. Working with offline safety cache.", err);
+      }
+    } else {
+      return simulatedDB.progressStore[userId] || {};
+    }
+    return {};
+  }
+
+  async function syncProgressToCloud() {
+    if (!currentUser) return false;
+    
+    setSyncState("Syncing data to Cloud...", true);
+    
+    if (isFirebaseConfigured) {
+      try {
+        if (!auth.currentUser) return false;
+        const docRef = db.doc(`artifacts/${appId}/users/${currentUser.uid}/progress/trackerData`);
+        await docRef.set({
+          progress: progress,
+          legacyProgressImported: true,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+        legacyProgressMigrationPending = false;
+        setSyncState("Metrics saved securely in Cloud", false);
+        return true;
+      } catch (err) {
+        console.error("Firestore sync metrics error: ", err);
+        setSyncState("Sync offline - auto retrying", false);
+        return false;
+      }
+    } else {
+      simulatedDB.progressStore[currentUser.uid] = progress;
+      simulatedDB.save();
+      legacyProgressMigrationPending = false;
+      setSyncState("Metrics saved offline", false);
+      return true;
+    }
+  }
+
+  function setSyncState(message, active) {
+    const el = document.getElementById('syncStatus');
+    el.innerText = message;
+    if (active) {
+      el.classList.add('syncing-pulse');
+    } else {
+      el.classList.remove('syncing-pulse');
+    }
+  }
+
+  // ---------- DYNAMIC MODAL REPLACEMENTS ----------
+  function showCustomConfirm(msg) {
+    return new Promise((resolve) => {
+      const confirmUI = document.createElement('div');
+      confirmUI.setAttribute('style', `
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(15, 23, 42, 0.4);
+        backdrop-filter: blur(2px);
+        display: flex; align-items: center; justify-content: center;
+        z-index: 9999;
+        font-family: 'Inter', sans-serif;
+      `);
+      confirmUI.innerHTML = `
+        <div style="background: white; width: 100%; max-width: 400px; padding: 24px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); border: 1px solid var(--border);">
+          <div style="font-weight: 700; font-size: 16px; color: var(--text); margin-bottom: 12px;">BITS Tracker Portal</div>
+          <div style="font-size: 13.5px; color: var(--text-soft); line-height: 1.5; margin-bottom: 24px;">${msg}</div>
+          <div style="display: flex; justify-content: flex-end; gap: 10px;">
+            <button id="cancelConf" style="background: #f1f2f4; border: none; padding: 9px 16px; font-weight: 600; border-radius: 8px; font-size: 13px; color: var(--text-soft); cursor: pointer;">Cancel</button>
+            <button id="okConf" style="background: var(--text); border: none; padding: 9px 16px; font-weight: 600; border-radius: 8px; font-size: 13px; color: white; cursor: pointer;">Confirm</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(confirmUI);
+      
+      confirmUI.querySelector('#cancelConf').addEventListener('click', () => {
+        document.body.removeChild(confirmUI);
+        resolve(false);
+      });
+      confirmUI.querySelector('#okConf').addEventListener('click', () => {
+        document.body.removeChild(confirmUI);
+        resolve(true);
+      });
+    });
+  }
+
+  // ---------- STATE CHANGERS ----------
+  function getModuleState(courseId, weekN, modIdx) {
+    return !!(progress[courseId] && progress[courseId][weekN] && progress[courseId][weekN][modIdx]);
+  }
+
+  function getWeekModulesCount(course, week) {
+    return (week.syllabus && week.syllabus.length) ? week.syllabus.length : 1;
+  }
+
+  function getWeekDoneCount(course, week) {
+    const total = getWeekModulesCount(course, week);
+    let done = 0;
+    for (let i = 0; i < total; i++) {
+      if (getModuleState(course.id, week.n, i)) done++;
+    }
+    return done;
+  }
+
+  function isWeekStudied(course, week) {
+    const total = getWeekModulesCount(course, week);
+    return getWeekDoneCount(course, week) === total && total > 0;
+  }
+
+  async function toggleModule(courseId, weekN, modIdx) {
+    if (!progress[courseId]) progress[courseId] = {};
+    if (!progress[courseId][weekN]) progress[courseId][weekN] = {};
+    progress[courseId][weekN][modIdx] = !progress[courseId][weekN][modIdx];
+    await syncProgressToCloud();
+    render();
+  }
+
+  async function toggleWholeWeek(course, week) {
+    const courseId = course.id;
+    const weekN = week.n;
+    const total = getWeekModulesCount(course, week);
+    const allDone = isWeekStudied(course, week);
+    if (!progress[courseId]) progress[courseId] = {};
+    if (!progress[courseId][weekN]) progress[courseId][weekN] = {};
+    const target = !allDone;
+    for (let i = 0; i < total; i++) {
+      progress[courseId][weekN][i] = target;
+    }
+    await syncProgressToCloud();
+    render();
+  }
+
+  async function toggleStudied(courseId, weekN) {
+    const course = COURSES.find(c => c.id === courseId);
+    const week = course.weeks.find(w => w.n === weekN);
+    await toggleWholeWeek(course, week);
+  }
+
+  // ---------- HELPERS ----------
+  function fmtDate(iso) {
+    if (!iso) return 'Schedule from Lumen';
+    const d = new Date(iso);
+    return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  }
+
+  function weekStatus(course, week) {
+    const studied = isWeekStudied(course, week);
+    if (studied) return 'studied';
+    if (!week.date) return 'pending';
+    const wd = new Date(week.date);
+    if (wd > TODAY) return 'upcoming';
+    const doneCount = getWeekDoneCount(course, week);
+    if (doneCount > 0) return 'partial';
+    return 'pending';
+  }
+
+  function courseCompletion(course) {
+    let total = 0, done = 0;
+    course.weeks.forEach(w => {
+      total += getWeekModulesCount(course, w);
+      done += getWeekDoneCount(course, w);
+    });
+    return { done, total, pct: total ? Math.round((done / total) * 100) : 0 };
+  }
+
+  function overallCompletion() {
+    let done = 0, total = 0;
+    COURSES.forEach(c => {
+      const r = courseCompletion(c);
+      done += r.done;
+      total += r.total;
+    });
+    return { done, total, pct: total ? Math.round((done / total) * 100) : 0 };
+  }
+
+  function deadlineState(iso) {
+    if (!iso) return 'future';
+    const d = new Date(iso);
+    const diffDays = Math.round((d - TODAY) / (1000 * 60 * 60 * 24));
+    if (diffDays < 0) return 'past';
+    if (diffDays <= 7) return 'soon';
+    return 'future';
+  }
+
+  const checkSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+  const chevronSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>';
+
+  // ---------- RENDER SCHEDULER ----------
+  function render() {
+    const hasCourses = COURSES.length > 0;
+    ['summaryGrid', 'analyticsSection', 'predictionSection', 'timelinePostBar', 'filterRow', 'deadlineSection']
+      .forEach(id => document.getElementById(id).classList.toggle('hidden', !hasCourses));
+
+    if (!hasCourses) {
+      document.getElementById('courseContainer').innerHTML =
+        `<div class="trimester-empty-state">${currentTrimester.name} curriculum has not been added yet.</div>`;
+      renderAnalytics();
+      return;
+    }
+
+    renderSummary();
+    renderPrediction();
+    renderFilters();
+    renderCourses();
+    renderDeadlines();
+    renderAnalytics();
+  }
+
+  function renderSummary() {
+    const grid = document.getElementById('summaryGrid');
+    const overall = overallCompletion();
+    let html = `
+      <div class="summary-card overall">
+        <div class="label">Overall progress</div>
+        <div class="value">${overall.pct}%</div>
+        <div class="mini-bar"><div class="mini-bar-fill" style="width:${overall.pct}%; background:#5b6168;"></div></div>
+      </div>
+    `;
+    COURSES.forEach(c => {
+      const r = courseCompletion(c);
+      html += `
+        <div class="summary-card">
+          <div class="label">${c.id.toUpperCase()}</div>
+          <div class="value" style="color:${c.color}">${r.pct}%</div>
+          <div class="mini-bar"><div class="mini-bar-fill" style="width:${r.pct}%; background:${c.color};"></div></div>
+        </div>
+      `;
+    });
+    grid.innerHTML = html;
+  }
+
+  function renderPrediction() {
+    const grid = document.getElementById('predictionGrid');
+    const overall = overallCompletion().pct;
+
+    const expected = overall >= 80 ? 'Excellent' : overall >= 60 ? 'Good' : overall >= 40 ? 'Average' : 'Needs Improvement';
+    const probability = Math.min(98, Math.max(25, overall + 10));
+    const risk = overall >= 80 ? 'Low' : overall >= 60 ? 'Moderate' : 'High';
+    const consistency = overall >= 80 ? 'Very High' : overall >= 60 ? 'High' : overall >= 40 ? 'Medium' : 'Low';
+    const studyTime = overall >= 80 ? '1.5–2 hrs/day' : overall >= 60 ? '2–3 hrs/day' : '3–4 hrs/day';
+
+    grid.innerHTML = `
+      <div class="prediction-card">
+        <div class="label">Expected Performance</div>
+        <div class="value">${expected}</div>
+      </div>
+
+      <div class="prediction-card">
+        <div class="label">Probability</div>
+        <div class="value">${probability}%</div>
+        <div style="color:var(--text-soft);font-size:12px;">Chance of achieving expected outcome</div>
+      </div>
+
+      <div class="prediction-card">
+        <div class="label">Risk</div>
+        <div class="value">${risk}</div>
+        <div style="color:var(--text-soft);font-size:12px;">Based on current progress</div>
+      </div>
+
+      <div class="prediction-card">
+        <div class="label">Consistency</div>
+        <div class="value">${consistency}</div>
+      </div>
+
+      <div class="prediction-card">
+        <div class="label">Recommended Study Time</div>
+        <div class="value">${studyTime}</div>
+      </div>
+
+      <div class="prediction-card">
+        <div class="label">Top Factors</div>
+        <ul>
+          <li>Course completion</li>
+          <li>Weekly consistency</li>
+          <li>Module completion rate</li>
+          <li>Pending syllabus</li>
+          <li>Study momentum</li>
+        </ul>
+      </div>
+    `;
+  }
+
+  function renderFilters() {
+    const row = document.getElementById('filterRow');
+    let html = `<button class="filter-pill ${activeFilter === 'all' ? 'active' : ''}" data-filter="all">All courses</button>`;
+    COURSES.forEach(c => {
+      html += `<button class="filter-pill ${activeFilter === c.id ? 'active' : ''}" data-filter="${c.id}">${c.name}</button>`;
+    });
+    row.innerHTML = html;
+    row.querySelectorAll('.filter-pill').forEach(btn => {
+      btn.addEventListener('click', () => {
+        activeFilter = btn.dataset.filter;
+        render();
+      });
+    });
+  }
+
+  function renderCourses() {
+    const container = document.getElementById('courseContainer');
+    const visibleCourses = activeFilter === 'all' ? COURSES : COURSES.filter(c => c.id === activeFilter);
+    let html = '';
+
+    visibleCourses.forEach(course => {
+      const r = courseCompletion(course);
+      const isOpen = openSections[course.id];
+
+      html += `
+        <div class="course-section">
+          <div class="course-header" data-toggle="${course.id}">
+            <div class="course-header-left">
+              <div class="course-dot" style="background:${course.color}"></div>
+              <div>
+                <div class="course-name">${course.name}</div>
+                <div class="course-meta">${course.credits}${course.presenter ? ` · Presented by ${course.presenter}` : ''}</div>
+              </div>
+            </div>
+            <div class="course-header-right">
+              <div class="course-progress-text">${r.done}/${r.total}</div>
+              <div class="course-progress-bar">
+                <div class="course-progress-fill" style="width:${r.pct}%; background:${course.color};"></div>
+              </div>
+              <div class="chevron ${isOpen ? 'open' : ''}">${chevronSvg}</div>
+            </div>
+          </div>
+          <div class="week-list ${isOpen ? 'open' : ''}">
+            ${course.weeks.map(w => renderWeekRow(course, w)).join('')}
+          </div>
+        </div>
+      `;
+    });
+
+    container.innerHTML = html;
+
+    container.querySelectorAll('.course-header').forEach(h => {
+      h.addEventListener('click', () => {
+        const id = h.dataset.toggle;
+        openSections[id] = !openSections[id];
+        renderCourses();
+      });
+    });
+
+    container.querySelectorAll('.week-check').forEach(chk => {
+      chk.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const [courseId, weekN] = chk.dataset.toggleweek.split('|');
+        toggleStudied(courseId, parseInt(weekN));
+      });
+    });
+
+    container.querySelectorAll('.module-row').forEach(row => {
+      row.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleModule(row.dataset.course, parseInt(row.dataset.week), parseInt(row.dataset.mod));
+      });
+    });
+  }
+
+  function renderWeekRow(course, week) {
+    const studied = isWeekStudied(course, week);
+    const status = weekStatus(course, week);
+    const modCount = getWeekModulesCount(course, week);
+    const doneCount = getWeekDoneCount(course, week);
+
+    let tagHtml = '';
+    if (status === 'studied') {
+      tagHtml = `<span class="week-status-tag" style="color:var(--done); background:var(--done-bg);">Studied</span>`;
+    } else if (status === 'upcoming') {
+      tagHtml = `<span class="week-status-tag" style="color:var(--text-faint); background:#f1f2f4;">Upcoming</span>`;
+    } else if (status === 'partial') {
+      tagHtml = `<span class="week-status-tag" style="color:var(--upcoming); background:var(--upcoming-bg);">${doneCount}/${modCount} done</span>`;
+    } else {
+      tagHtml = `<span class="week-status-tag" style="color:var(--overdue); background:var(--overdue-bg);">Pending</span>`;
+    }
+
+    const syllabusHtml = (week.syllabus && week.syllabus.length)
+      ? `<ul class="week-syllabus">${week.syllabus.map((s, idx) => {
+          const checked = getModuleState(course.id, week.n, idx);
+          const moduleLabel = week.caseStudy && /use case overview/i.test(s)
+            ? `Case study overview: ${week.caseStudy}`
+            : s;
+          return `
+            <li class="module-row" data-course="${course.id}" data-week="${week.n}" data-mod="${idx}">
+              <div class="module-check ${checked ? 'checked' : ''}" style="${checked ? `background:${course.color}; border-color:${course.color};` : ''}">${checkSvg}</div>
+              <span class="module-label ${checked ? 'checked-text' : ''}">${moduleLabel}</span>
+            </li>
+          `;
+        }).join('')}</ul>`
+      : '';
+
+    return `
+      <div class="week-row ${studied ? 'studied' : ''}">
+        <div class="week-check ${studied ? 'checked' : ''}" data-toggleweek="${course.id}|${week.n}" style="${studied ? `background:${course.color}; border-color:${course.color};` : ''}">
+          ${checkSvg}
+        </div>
+        <div class="week-num">Week ${week.label || week.n}</div>
+        <div class="week-info">
+          <div class="week-topic">${week.topic}</div>
+          <div class="week-date">${fmtDate(week.date)}</div>
+          ${syllabusHtml}
+        </div>
+        ${tagHtml}
+      </div>
+    `;
+  }
+
+  function renderDeadlines() {
+    const grid = document.getElementById('deadlineGrid');
+    let html = '';
+    DEADLINES.forEach(dl => {
+      const state = deadlineState(dl.date);
+      let tagColor = 'var(--text-faint)', tagBg = '#f1f2f4';
+      if (state === 'past') { tagColor = 'var(--text-faint)'; tagBg = '#f1f2f4'; }
+      if (state === 'soon') { tagColor = 'var(--overdue)'; tagBg = 'var(--overdue-bg)'; }
+      if (state === 'future') { tagColor = 'var(--upcoming)'; tagBg = 'var(--upcoming-bg)'; }
+
+      html += `
+        <div class="deadline-card">
+          <div class="dl-left">
+            <div class="dl-title">${dl.title}</div>
+            <div class="dl-sub">${dl.sub}</div>
+          </div>
+          <div class="dl-date-tag" style="color:${tagColor}; background:${tagBg};">${fmtDate(dl.date)}</div>
+        </div>
+      `;
+    });
+    grid.innerHTML = html;
+  }
+
+  // --- Analytics/Charts Section ---
+  let analyticsCharts = {};
+
+  // ── POST TO TIMELINE ──────────────────────────────────────────────────────
+
+  const TL_STORAGE_KEY = 'academos_timeline_cards_v1';
+
+  // ---------- localStorage helpers ----------
+
+  function tlLoadCards() {
+    try {
+      return JSON.parse(localStorage.getItem(TL_STORAGE_KEY) || '[]');
+    } catch { return []; }
+  }
+
+  function tlSaveCard(entry) {
+    // entry = { id, dataURL, userName, ts, overallPct, savedAt }
+    const cards = tlLoadCards();
+    cards.unshift(entry);                   // newest first
+    // Keep only the 10 most recent to avoid filling localStorage
+    const trimmed = cards.slice(0, 10);
+    try {
+      localStorage.setItem(TL_STORAGE_KEY, JSON.stringify(trimmed));
+      return true;
+    } catch (e) {
+      // Storage quota exceeded — drop oldest and retry once
+      try {
+        localStorage.setItem(TL_STORAGE_KEY, JSON.stringify(trimmed.slice(0, 5)));
+        return true;
+      } catch { return false; }
+    }
+  }
+
+  function tlDeleteCard(id) {
+    const cards = tlLoadCards().filter(c => c.id !== id);
+    localStorage.setItem(TL_STORAGE_KEY, JSON.stringify(cards));
+  }
+
+  // ---------- Main entry point ----------
+
+  document.getElementById('postTimelineBtn').addEventListener('click', buildTimelinePost);
+
+  async function buildTimelinePost() {
+    const btn = document.getElementById('postTimelineBtn');
+    btn.classList.add('loading');
+    btn.innerHTML = `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="animation:spin 0.9s linear infinite;">
+        <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+      </svg>
+      Generating…`;
+
+    try {
+      // --- Build data snapshot ---
+      const overall = overallCompletion();
+      const courseData = COURSES.map(c => {
+        const r = courseCompletion(c);
+        return { ...c, pct: r.pct, done: r.done, total: r.total };
+      });
+
+      const now      = new Date();
+      const ts       = now.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+      const userName = (currentUser && currentUser.displayName)
+        ? currentUser.displayName
+        : (currentUser && currentUser.email ? currentUser.email.split('@')[0] : 'Student');
+
+      // --- Grab the two live Chart.js canvases directly (synchronous, no html2canvas) ---
+      const srcBar  = document.getElementById('courseProgressChart');
+      const srcLine = document.getElementById('weeklyCompletionChart');
+      if (!srcBar || !srcLine) throw new Error('Charts not rendered yet.');
+
+      const dataURL = compositeChartCard(srcBar, srcLine, userName, ts);
+
+      // ① Persist to localStorage
+      const cardEntry = {
+        id:      `tl_${Date.now()}`,
+        dataURL,
+        fileName: `academic-os-charts-${userName.replace(/\s+/g, '-').toLowerCase()}-${Date.now()}.png`,
+        userName,
+        ts,
+        savedAt: now.toISOString(),
+      };
+      const saved = tlSaveCard(cardEntry);
+
+      // ② Show preview modal immediately (no async wait)
+      showTimelinePreview(dataURL, userName, ts, cardEntry.id, cardEntry.fileName, saved);
+
+    } catch (err) {
+      console.error('Timeline snapshot failed:', err);
+      alert('Could not generate the progress card. Please try again.');
+    } finally {
+      btn.classList.remove('loading');
+      btn.innerHTML = `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>
+        </svg>
+        Post to Timeline`;
+    }
+  }
+
+  function _triggerDownload(dataURL, fileName) {
+    const a = document.createElement('a');
+    a.href = dataURL;
+    a.download = fileName;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => document.body.removeChild(a), 200);
+  }
+
+  // ---------- Chart compositor ----------
+  // Reads the two live Chart.js canvases directly via toDataURL() — synchronous,
+  // no html2canvas, no off-screen DOM card.  Produces a professional dark-framed
+  // PNG with only the two charts and a minimal brand header/footer.
+
+  function compositeChartCard(srcBar, srcLine, userName, ts) {
+    const S      = 2;             // retina scale
+    const PAD    = 44 * S;        // outer padding (left/right of card)
+    const GAP    = 48 * S;        // gap BETWEEN the two chart cards
+    const HDRH   = 68 * S;        // header height
+    const FTRH   = 46 * S;        // footer height
+    const LBLH   = 24 * S;        // label row height above each chart
+    const R      = 14 * S;        // outer card corner radius
+    const INSET  = 14 * S;        // padding inside each white chart card
+    const CARD_R = 12 * S;        // white card corner radius
+
+    // Source canvas rendered sizes
+    const chartW = (srcBar.offsetWidth  || 480) * S;
+    const chartH = (srcBar.offsetHeight || 250) * S;
+
+    // Each white card is the chart + inset on all four sides
+    const cardW  = chartW + INSET * 2;
+    const cardH  = chartH + INSET * 2;
+
+    const totalW = PAD + cardW + GAP + cardW + PAD;
+    const totalH = HDRH + PAD + LBLH + cardH + PAD + FTRH;
+
+    const out = document.createElement('canvas');
+    out.width  = totalW;
+    out.height = totalH;
+    const ctx  = out.getContext('2d');
+
+    // ── Background ─────────────────────────────────────────────────────────
+    ctx.fillStyle = '#0f1117';
+    rrect(ctx, 0, 0, totalW, totalH, R); ctx.fill();
+
+    // Subtle top glow
+    const grd = ctx.createLinearGradient(0, 0, 0, HDRH * 2);
+    grd.addColorStop(0, 'rgba(255,255,255,0.05)');
+    grd.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = grd;
+    rrect(ctx, 0, 0, totalW, totalH, R); ctx.fill();
+
+    // ── Header ─────────────────────────────────────────────────────────────
+    ctx.fillStyle = 'rgba(255,255,255,0.03)';
+    rrectTop(ctx, 0, 0, totalW, HDRH, R); ctx.fill();
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.07)';
+    ctx.lineWidth   = 1;
+    ctx.beginPath(); ctx.moveTo(0, HDRH); ctx.lineTo(totalW, HDRH); ctx.stroke();
+
+    ctx.fillStyle    = 'rgba(255,255,255,0.88)';
+    ctx.font         = `700 ${15 * S}px Inter,-apple-system,sans-serif`;
+    ctx.textBaseline = 'middle';
+    ctx.fillText('Academic OS  ·  Learning Analytics', PAD, HDRH / 2);
+
+    ctx.fillStyle = 'rgba(255,255,255,0.28)';
+    ctx.font      = `500 ${11 * S}px Inter,-apple-system,sans-serif`;
+    const dw = ctx.measureText(ts).width;
+    ctx.fillText(ts, totalW - PAD - dw, HDRH / 2);
+
+    // ── Card positions ──────────────────────────────────────────────────────
+    const card1X  = PAD;                       // left card X
+    const card2X  = PAD + cardW + GAP;         // right card X
+    const lblY    = HDRH + PAD;               // top of label row
+    const cardY   = lblY + LBLH;              // top of white cards
+    const chartY  = cardY + INSET;            // chart draw origin Y (inside card)
+
+    // ── Labels (aligned to card left edge) ─────────────────────────────────
+    ctx.fillStyle    = 'rgba(255,255,255,0.32)';
+    ctx.font         = `700 ${9 * S}px Inter,-apple-system,sans-serif`;
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText('COURSE COMPLETION', card1X, lblY + LBLH * 0.78);
+    ctx.fillText('MODULES BY COURSE',  card2X, lblY + LBLH * 0.78);
+
+    // ── White cards + charts ────────────────────────────────────────────────
+    [[srcBar, card1X], [srcLine, card2X]].forEach(([src, cx]) => {
+      // White card background
+      ctx.fillStyle = 'rgba(255,255,255,0.97)';
+      rrect(ctx, cx, cardY, cardW, cardH, CARD_R);
+      ctx.fill();
+      // Draw live canvas — synchronous canvas-to-canvas, always ready
+      ctx.drawImage(src, cx + INSET, chartY, chartW, chartH);
+    });
+
+    // ── Footer ─────────────────────────────────────────────────────────────
+    const ftrY = totalH - FTRH;
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx.lineWidth   = 1;
+    ctx.beginPath(); ctx.moveTo(0, ftrY); ctx.lineTo(totalW, ftrY); ctx.stroke();
+
+    ctx.fillStyle    = 'rgba(255,255,255,0.18)';
+    ctx.font         = `600 ${10 * S}px Inter,-apple-system,sans-serif`;
+    ctx.textBaseline = 'middle';
+    ctx.fillText('academic-os.bitspilani.ac.in', PAD, ftrY + FTRH / 2);
+
+    ctx.fillStyle = 'rgba(255,255,255,0.18)';
+    ctx.font      = `500 ${10 * S}px Inter,-apple-system,sans-serif`;
+    const uw = ctx.measureText(userName).width;
+    ctx.fillText(userName, totalW - PAD - uw, ftrY + FTRH / 2);
+
+    return out.toDataURL('image/png');
+  }
+
+  // Rounded-rect path helpers (no Path2D — Safari < 15.4 compat)
+  function rrect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);   ctx.quadraticCurveTo(x + w, y,     x + w, y + r);
+    ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);   ctx.quadraticCurveTo(x,     y + h, x,     y + h - r);
+    ctx.lineTo(x, y + r);       ctx.quadraticCurveTo(x,     y,     x + r, y);
+    ctx.closePath();
+  }
+
+  function rrectTop(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h);
+    ctx.lineTo(x, y + h);
+    ctx.lineTo(x, y + r);     ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  }
+
+  function showTimelinePreview(dataURL, userName, ts, savedCardId, fileName, wasSaved) {
+    const overlay = document.createElement('div');
+    overlay.className = 'tl-preview-overlay';
+
+    // Saved-cards thumbnail gallery (excludes the card just saved, shown as main preview)
+    const allCards  = tlLoadCards();
+    const prevCards = allCards.filter(c => c.id !== savedCardId);
+    const galleryHTML = prevCards.length ? `
+      <div class="tl-saved-section">
+        <div class="tl-saved-header">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;flex-shrink:0;">
+            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
+          </svg>
+          Previous snapshots (${prevCards.length})
+        </div>
+        <div class="tl-saved-grid">
+          ${prevCards.map(c => `
+            <div class="tl-saved-thumb">
+              <img src="${c.dataURL}" alt="Snapshot from ${c.ts}">
+              <div class="tl-saved-thumb-meta"><span>${c.ts}</span></div>
+              <div class="tl-saved-thumb-actions">
+                <button class="tl-thumb-dl" data-url="${c.dataURL}" data-file="${c.fileName || 'charts.png'}" title="Download">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                </button>
+                <button class="tl-thumb-del" data-id="${c.id}" title="Delete">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                </button>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>` : '';
+
+    overlay.innerHTML = `
+      <div class="tl-preview-modal">
+        <div class="tl-preview-top">
+          <div>
+            <h3>Your Charts Snapshot</h3>
+            <p>Captured from your live progress charts &middot; Ready to share when Timeline launches.</p>
+          </div>
+          <span class="tl-coming-soon-chip">Timeline coming soon</span>
+        </div>
+
+        <div class="tl-saved-banner${wasSaved ? '' : ' tl-saved-banner--warn'}">
+          ${wasSaved
+            ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;flex-shrink:0;"><polyline points="20 6 9 17 4 12"/></svg>
+               Saved to browser &middot; ${allCards.length} card${allCards.length !== 1 ? 's' : ''} stored
+               <button class="tl-banner-clear" id="tlClearAllBtn">Clear all</button>`
+            : `Storage full &mdash; could not save. Download still completed.`
+          }
+        </div>
+
+        <div class="tl-preview-img-wrap">
+          <img src="${dataURL}" alt="Progress card preview">
+        </div>
+
+        ${galleryHTML}
+
+        <div class="tl-preview-actions">
+          <button class="tl-action-btn secondary" id="tlCloseBtn">Close</button>
+          <button class="tl-action-btn secondary" id="tlCopyBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+            </svg>
+            Copy image
+          </button>
+          <button class="tl-action-btn primary" id="tlDownloadAgainBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            Download again
+          </button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    // Close handlers
+    overlay.querySelector('#tlCloseBtn').addEventListener('click', () => document.body.removeChild(overlay));
+    overlay.addEventListener('click', e => { if (e.target === overlay) document.body.removeChild(overlay); });
+
+    // Download again
+    overlay.querySelector('#tlDownloadAgainBtn').addEventListener('click', () => {
+      _triggerDownload(dataURL, fileName || `academic-os-charts-${Date.now()}.png`);
+    });
+
+    // Copy to clipboard
+    overlay.querySelector('#tlCopyBtn').addEventListener('click', async () => {
+      const copyBtn = overlay.querySelector('#tlCopyBtn');
+      try {
+        const res  = await fetch(dataURL);
+        const blob = await res.blob();
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        copyBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Copied!`;
+        setTimeout(() => {
+          copyBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy image`;
+        }, 2000);
+      } catch { copyBtn.innerText = 'Copy not supported'; }
+    });
+
+    // Clear all
+    const clearBtn = overlay.querySelector('#tlClearAllBtn');
+    if (clearBtn) {
+      clearBtn.addEventListener('click', () => {
+        localStorage.removeItem(TL_STORAGE_KEY);
+        document.body.removeChild(overlay);
+      });
+    }
+
+    // Per-thumb download
+    overlay.querySelectorAll('.tl-thumb-dl').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        _triggerDownload(btn.dataset.url, btn.dataset.file);
+      });
+    });
+
+    // Per-thumb delete
+    overlay.querySelectorAll('.tl-thumb-del').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        tlDeleteCard(btn.dataset.id);
+        btn.closest('.tl-saved-thumb').remove();
+        const remaining = tlLoadCards().filter(c => c.id !== savedCardId).length;
+        const hdr = overlay.querySelector('.tl-saved-header');
+        if (hdr) hdr.lastChild.textContent = ` Previous cards (${remaining})`;
+        if (remaining === 0) {
+          const sec = overlay.querySelector('.tl-saved-section');
+          if (sec) sec.remove();
+        }
+      });
+    });
+  }
+
+  // ── ANALYTICS ──────────────────────────────────────────────────────────────
+
+  function renderAnalytics() {
+    if (typeof Chart === 'undefined') return;
+
+    Object.values(analyticsCharts).forEach(chart => chart.destroy());
+    analyticsCharts = {};
+    if (!COURSES.length) return;
+
+    const progressCtx = document.getElementById('courseProgressChart');
+    const weeklyCtx = document.getElementById('weeklyCompletionChart');
+    if (!progressCtx || !weeklyCtx) return;
+
+    analyticsCharts.progress = new Chart(progressCtx, {
+      type: 'bar',
+      data: {
+        labels: COURSES.map(c => c.name),
+        datasets: [{
+          label: 'Completion %',
+          data: COURSES.map(c => courseCompletion(c).pct)
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          title: { display: true, text: 'Course Completion' }
+        },
+        scales: {
+          x: {
+            ticks: {
+              autoSkip: false,
+              maxRotation: 0,
+              minRotation: 0,
+              callback: function(value) {
+                const labels = COURSES.map(c => c.name);
+                return labels[value];
+              }
+            }
+          },
+          y: {
+            beginAtZero: true,
+            max: 100
+          }
+        }
+      }
+    });
+
+    analyticsCharts.weekly = new Chart(weeklyCtx, {
+      type: 'line',
+      data: {
+        labels: COURSES.map(c => c.id.toUpperCase()),
+        datasets: [{
+          label: 'Modules Completed',
+          data: COURSES.map(c => courseCompletion(c).done),
+          tension: 0.35
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { title: { display: true, text: 'Completed Modules by Course' } }
+      }
+    });
+  }
+</script>
+<script src="js/dashboard.js"></script>
+</body>
+</html>

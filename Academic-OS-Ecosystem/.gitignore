@@ -1,0 +1,62 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment/secrets
+.env
+.env.*
+!.env.example
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+
+# Large/local files
+*.mp4
+*.zip
+
+# IDE
+.vscode/
+.idea/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS/local development
+.pytest_cache/
+.mypy_cache/# Python and local development
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local data and secrets
+.local-data/
+*.db
+.env
+.env.*
+!.env.example
+.lumen_credentials.json
+
+# Deployment/build caches
+.firebase/
+.vercel/
+node_modules/
+build/
+dist/
+.DS_Store
+/archive/
