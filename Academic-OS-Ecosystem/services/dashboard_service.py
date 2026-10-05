@@ -85,7 +85,10 @@ class FirebaseIdTokenVerifier:
             raise FirebaseTokenError("Firebase ID token must use RS256")
 
         kid = header.get("kid")
-        cert_pem = self._get_certs().get(kid)
+        try:
+            cert_pem = self._get_certs().get(kid)
+        except requests.RequestException as exc:
+            raise FirebaseTokenError("Firebase signing certificates are unavailable") from exc
         if not cert_pem:
             raise FirebaseTokenError("Firebase signing certificate not found")
 
@@ -121,9 +124,14 @@ class FirebaseIdTokenVerifier:
             raise FirebaseTokenError("Firebase ID token issuer mismatch")
         if not claims.get("sub"):
             raise FirebaseTokenError("Firebase ID token subject is missing")
-        if int(claims.get("exp", 0)) <= now:
+        try:
+            expires_at = int(claims.get("exp", 0))
+            issued_at = int(claims.get("iat", 0))
+        except (TypeError, ValueError) as exc:
+            raise FirebaseTokenError("Firebase ID token timestamps are invalid") from exc
+        if expires_at <= now:
             raise FirebaseTokenError("Firebase ID token has expired")
-        if int(claims.get("iat", 0)) > now + 300:
+        if issued_at <= 0 or issued_at > now + 300:
             raise FirebaseTokenError("Firebase ID token issued-at is in the future")
 
 
@@ -135,7 +143,7 @@ def is_admin_email(email: Optional[str]) -> bool:
 def assert_admin_claims(claims: Dict[str, Any]) -> Dict[str, Any]:
     """Enforce the exact admin email required by the admin dashboard flow."""
     email = claims.get("email")
-    if not is_admin_email(email):
+    if not is_admin_email(email) or claims.get("email_verified") is not True:
         raise AdminAccessDenied("403 Forbidden: admin dashboard access is restricted")
     return claims
 

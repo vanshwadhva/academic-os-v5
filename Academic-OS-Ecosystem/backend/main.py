@@ -1,10 +1,15 @@
 import json
+import logging
 import os
 import secrets
 import sys
+import tempfile
+import time
 from pathlib import Path
 from typing import Any, Dict, Optional
+from urllib.parse import urlsplit
 from fastapi.middleware.cors import CORSMiddleware
+from cryptography.fernet import Fernet, InvalidToken
 
 import joblib
 import pandas as pd
@@ -27,11 +32,44 @@ from integrations.sync_manager import (  # noqa: E402
     SyncAlreadyRunning,
     SyncManager,
 )
-from monitoring.dashboard import router as admin_dashboard_router  # noqa: E402
+from monitoring.dashboard import router as admin_dashboard_router, require_admin_claims  # noqa: E402
 from services.dashboard_service import FirebaseIdTokenVerifier, FirebaseTokenError  # noqa: E402
 
 ARTIFACT_DIR = Path(__file__).resolve().parent.parent / "model_artifacts"
 LUMEN_CREDENTIALS_PATH = Path(os.getenv("LUMEN_CREDENTIALS_PATH", ARTIFACT_DIR.parent / ".lumen_credentials.json"))
+LUMEN_CREDENTIALS_ENCRYPTION_KEY = os.getenv("LUMEN_CREDENTIALS_ENCRYPTION_KEY", "").strip()
+LUMEN_OAUTH_STATE_TTL_SECONDS = 600
+_LUMEN_CREDENTIALS_PREFIX = b"ACADEMIC_OS_FERNET_V1\n"
+logger = logging.getLogger(__name__)
+
+
+def _configured_cors_origins() -> list[str]:
+    defaults = [
+        "http://localhost:5500",
+        "http://127.0.0.1:5500",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "https://bits-dsai-tracker.web.app",
+        "https://bits-dsai-tracker.firebaseapp.com",
+    ]
+    extra = [origin.strip() for origin in os.getenv("CORS_ORIGINS", "").split(",") if origin.strip()]
+    origins = list(dict.fromkeys(defaults + extra))
+    for origin in origins:
+        parsed = urlsplit(origin)
+        is_local_http = parsed.scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1"}
+        if (
+            origin in {"*", "null"}
+            or parsed.scheme not in {"https", "http"}
+            or (parsed.scheme != "https" and not is_local_http)
+            or not parsed.hostname
+            or parsed.path != ""
+            or parsed.query
+            or parsed.fragment
+            or parsed.username
+            or parsed.password
+        ):
+            raise RuntimeError("CORS_ORIGINS must contain explicit HTTPS origins (or localhost HTTP origins).")
+    return origins
 
 app = FastAPI(
     title="Academic OS DSP-BITS Tracker",
@@ -45,18 +83,10 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5500",
-        "http://127.0.0.1:5500",
-        "http://localhost:8000",
-        "http://127.0.0.1:8000",
-        "https://bits-dsai-tracker.web.app",
-        "https://bits-dsai-tracker.firebaseapp.com",
-        "null",
-    ] + [origin.strip() for origin in os.getenv("CORS_ORIGINS", "").split(",") if origin.strip()],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=_configured_cors_origins(),
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Request-Id", "X-Idempotency-Key"],
 )
 
 app.include_router(admin_dashboard_router)
@@ -65,7 +95,7 @@ _model = None
 _feature_cols = None
 _importance = None
 _lumen_credentials: Dict[str, LumenCredential] = {}
-_lumen_oauth_states: Dict[str, Dict[str, str]] = {}
+_lumen_oauth_states: Dict[str, Dict[str, Any]] = {}
 _firebase_verifier = FirebaseIdTokenVerifier()
 
 
@@ -77,15 +107,17 @@ def _lumen_redirect_uri() -> str:
     return os.getenv("LUMEN_REDIRECT_URI", "http://localhost:8000/api/lumen/callback")
 
 
-def _credential_from_dev_token(access_token: Optional[str], lms_user_id: Optional[str]) -> Optional[LumenCredential]:
-    if not access_token:
-        return None
-    return LumenCredential(
-        access_token=access_token,
-        expires_in=int(os.getenv("LUMEN_DEV_TOKEN_EXPIRES_IN", "3600")),
-        lms_user_id=lms_user_id,
-        auth_type="manual_token",
-    )
+class CredentialEncryptionUnavailable(RuntimeError):
+    """Raised when the service has no key for protecting saved Lumen tokens."""
+
+
+def _credential_cipher() -> Fernet:
+    if not LUMEN_CREDENTIALS_ENCRYPTION_KEY:
+        raise CredentialEncryptionUnavailable("Lumen credential encryption is not configured.")
+    try:
+        return Fernet(LUMEN_CREDENTIALS_ENCRYPTION_KEY.encode("ascii"))
+    except (ValueError, TypeError, UnicodeEncodeError) as exc:
+        raise CredentialEncryptionUnavailable("Lumen credential encryption key is invalid.") from exc
 
 
 def _credential_to_dict(credential: LumenCredential) -> Dict[str, Any]:
@@ -114,43 +146,104 @@ def _load_lumen_credentials() -> None:
     if not LUMEN_CREDENTIALS_PATH.exists():
         return
     try:
-        payload = json.loads(LUMEN_CREDENTIALS_PATH.read_text())
-        _lumen_credentials.update(
-            {
-                student_id: _credential_from_dict(data)
-                for student_id, data in payload.items()
-                if data.get("access_token")
-            }
-        )
-    except Exception as exc:
-        print(f"Warning: failed to load Lumen credentials: {exc}")
+        raw = LUMEN_CREDENTIALS_PATH.read_bytes()
+        encrypted = raw.startswith(_LUMEN_CREDENTIALS_PREFIX)
+        if encrypted:
+            payload_bytes = _credential_cipher().decrypt(raw[len(_LUMEN_CREDENTIALS_PREFIX):])
+        else:
+            # Migrate legacy local plaintext only when an encryption key is configured.
+            try:
+                _credential_cipher()
+            except CredentialEncryptionUnavailable:
+                os.chmod(LUMEN_CREDENTIALS_PATH, 0o600)
+                raise
+            payload_bytes = raw
+        payload = json.loads(payload_bytes)
+        if not isinstance(payload, dict):
+            raise ValueError("Invalid Lumen credential store format.")
+        credentials = {
+            student_id: _credential_from_dict(data)
+            for student_id, data in payload.items()
+            if isinstance(data, dict) and data.get("access_token")
+        }
+        if not encrypted and credentials:
+            _save_lumen_credentials(credentials)
+        elif encrypted:
+            os.chmod(LUMEN_CREDENTIALS_PATH, 0o600)
+        _lumen_credentials.update(credentials)
+    except (CredentialEncryptionUnavailable, InvalidToken, OSError, ValueError, TypeError, json.JSONDecodeError):
+        logger.error("Lumen credentials were not loaded; configure the encryption key and reconnect Lumen.")
 
 
-def _save_lumen_credentials() -> None:
-    LUMEN_CREDENTIALS_PATH.write_text(
-        json.dumps(
-            {student_id: _credential_to_dict(credential) for student_id, credential in _lumen_credentials.items()},
-            indent=2,
-        )
+def _save_lumen_credentials(credentials: Optional[Dict[str, LumenCredential]] = None) -> None:
+    cipher = _credential_cipher()
+    source = credentials if credentials is not None else _lumen_credentials
+    payload = json.dumps(
+        {student_id: _credential_to_dict(credential) for student_id, credential in source.items()},
+        indent=2,
+    ).encode("utf-8")
+    encrypted = _LUMEN_CREDENTIALS_PREFIX + cipher.encrypt(payload)
+    LUMEN_CREDENTIALS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    file_descriptor, temporary_path = tempfile.mkstemp(
+        prefix=f".{LUMEN_CREDENTIALS_PATH.name}.",
+        dir=str(LUMEN_CREDENTIALS_PATH.parent),
     )
-
-
-def _require_firebase_user(authorization: Optional[str], expected_student_id: str) -> None:
-    if not authorization:
-        return
-    if not authorization.lower().startswith("bearer "):
-        raise HTTPException(status_code=401, detail="Invalid Authorization header.")
     try:
-        claims = _firebase_verifier.verify(authorization[7:].strip())
-    except FirebaseTokenError as exc:
-        raise HTTPException(status_code=401, detail="Invalid Firebase ID token.") from exc
-    token_uid = claims.get("sub") or claims.get("uid") or claims.get("user_id")
-    if token_uid != expected_student_id:
-        raise HTTPException(status_code=403, detail="Firebase user cannot sync another student.")
+        os.fchmod(file_descriptor, 0o600)
+        with os.fdopen(file_descriptor, "wb") as credentials_file:
+            credentials_file.write(encrypted)
+        os.replace(temporary_path, LUMEN_CREDENTIALS_PATH)
+        os.chmod(LUMEN_CREDENTIALS_PATH, 0o600)
+    finally:
+        if os.path.exists(temporary_path):
+            os.unlink(temporary_path)
+
+
+def _store_lumen_credential(student_id: str, credential: LumenCredential) -> None:
+    updated = dict(_lumen_credentials)
+    updated[student_id] = credential
+    _save_lumen_credentials(updated)
+    _lumen_credentials[student_id] = credential
+
+
+def _new_lumen_oauth_state(student_id: str) -> str:
+    now = time.time()
+    expired_states = [
+        state for state, value in _lumen_oauth_states.items()
+        if now - float(value.get("created_at", 0)) > LUMEN_OAUTH_STATE_TTL_SECONDS
+    ]
+    for state in expired_states:
+        _lumen_oauth_states.pop(state, None)
+    user_states = sorted(
+        (
+            (state, float(value.get("created_at", 0)))
+            for state, value in _lumen_oauth_states.items()
+            if value.get("student_id") == student_id
+        ),
+        key=lambda item: item[1],
+    )
+    for state, _created_at in user_states[:-4]:
+        _lumen_oauth_states.pop(state, None)
+    if len(_lumen_oauth_states) >= 10000:
+        oldest_state = min(
+            _lumen_oauth_states,
+            key=lambda state: float(_lumen_oauth_states[state].get("created_at", 0)),
+        )
+        _lumen_oauth_states.pop(oldest_state, None)
+    state = secrets.token_urlsafe(32)
+    _lumen_oauth_states[state] = {"student_id": student_id, "created_at": now}
+    return state
+
+
+def _require_firebase_user(authorization: Optional[str], expected_student_id: str) -> Dict[str, Any]:
+    claims = _require_authenticated_student(authorization)
+    if claims["sub"] != expected_student_id:
+        raise HTTPException(status_code=403, detail="Firebase user cannot access another student.")
+    return claims
 
 
 def _require_authenticated_student(authorization: Optional[str]) -> Dict[str, Any]:
-    """Verify a BITS Firebase identity before accepting its tracker snapshot."""
+    """Require a verified BITS Firebase identity for student-owned operations."""
     if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(status_code=401, detail="Firebase ID token is required.")
     try:
@@ -159,7 +252,11 @@ def _require_authenticated_student(authorization: Optional[str]) -> Dict[str, An
         raise HTTPException(status_code=401, detail="Invalid Firebase ID token.") from exc
 
     email = str(claims.get("email") or "").strip().lower()
-    if not claims.get("sub") or not email.endswith("@bitspilani-digital.edu.in"):
+    if (
+        not claims.get("sub")
+        or not email.endswith("@bitspilani-digital.edu.in")
+        or claims.get("email_verified") is not True
+    ):
         raise HTTPException(status_code=403, detail="A BITS student account is required.")
     return claims
 
@@ -250,7 +347,7 @@ def health():
 
 @app.get("/api/lumen/connect-url")
 def lumen_connect_url(
-    student_id: str = Query(..., min_length=1),
+    student_id: str = Query(..., min_length=1, max_length=128),
     authorization: Optional[str] = Header(None),
 ):
     """
@@ -260,6 +357,10 @@ def lumen_connect_url(
     in the BITS Lumen Brightspace tenant.
     """
     _require_firebase_user(authorization, student_id)
+    try:
+        _credential_cipher()
+    except CredentialEncryptionUnavailable as exc:
+        raise HTTPException(status_code=503, detail="Lumen credential encryption is not configured.") from exc
     manager = SyncManager.from_env()
     if not manager.client_id:
         raise HTTPException(
@@ -267,8 +368,7 @@ def lumen_connect_url(
             detail="LUMEN_CLIENT_ID is not configured on the backend.",
         )
 
-    state = secrets.token_urlsafe(32)
-    _lumen_oauth_states[state] = {"student_id": student_id}
+    state = _new_lumen_oauth_state(student_id)
     auth_url = manager.build_oauth_url(redirect_uri=_lumen_redirect_uri(), state=state)
     return {
         "auth_url": auth_url,
@@ -279,60 +379,73 @@ def lumen_connect_url(
 
 
 @app.get("/api/lumen/callback")
-def lumen_callback(code: str, state: str):
+def lumen_callback(
+    code: str = Query(..., min_length=1, max_length=2048),
+    state: str = Query(..., min_length=16, max_length=256),
+):
     state_payload = _lumen_oauth_states.pop(state, None)
-    if not state_payload:
+    if (
+        not state_payload
+        or time.time() - float(state_payload.get("created_at", 0)) > LUMEN_OAUTH_STATE_TTL_SECONDS
+    ):
         raise HTTPException(status_code=400, detail="Invalid or expired Lumen OAuth state.")
 
     manager = SyncManager.from_env()
     try:
         credential = manager.exchange_code(code=code, redirect_uri=_lumen_redirect_uri())
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Lumen token exchange failed: {exc}") from exc
+        logger.warning("Lumen OAuth token exchange failed.")
+        raise HTTPException(status_code=400, detail="Lumen token exchange failed.") from exc
 
     student_id = state_payload["student_id"]
-    _lumen_credentials[student_id] = credential
-    _save_lumen_credentials()
+    try:
+        _store_lumen_credential(student_id, credential)
+    except CredentialEncryptionUnavailable as exc:
+        raise HTTPException(status_code=503, detail="Lumen credential encryption is not configured.") from exc
     return RedirectResponse(f"{_frontend_redirect_url()}?lumen=connected")
 
 
 @app.get("/api/lumen/progress")
 def lumen_progress(
-    student_id: str = Query(..., min_length=1),
-    access_token: Optional[str] = Query(None),
-    lms_user_id: Optional[str] = Query(None),
+    student_id: str = Query(..., min_length=1, max_length=128),
     authorization: Optional[str] = Header(None),
 ):
     """
     Fetch live progress from Lumen and return a dashboard-ready payload.
 
-    Normal use: call /api/lumen/connect-url first, complete OAuth, then call
-    this endpoint. For local development, an access_token query parameter can
-    seed a temporary in-memory credential.
+    The Firebase identity must own student_id. Lumen credentials are loaded
+    only from the encrypted server-side credential store.
     """
-    if not access_token:
-        _require_firebase_user(authorization, student_id)
+    _require_firebase_user(authorization, student_id)
 
-    credential = _credential_from_dev_token(access_token, lms_user_id) or _lumen_credentials.get(student_id)
+    credential = _lumen_credentials.get(student_id)
     manager = SyncManager.from_env()
 
     if credential and credential.is_expired() and credential.refresh_token:
-        credential = manager.refresh_credential(credential)
-        _lumen_credentials[student_id] = credential
-        _save_lumen_credentials()
+        try:
+            credential = manager.refresh_credential(credential)
+            _store_lumen_credential(student_id, credential)
+        except CredentialEncryptionUnavailable as exc:
+            raise HTTPException(status_code=503, detail="Lumen credential encryption is not configured.") from exc
+        except Exception as exc:
+            logger.warning("Lumen token refresh failed for an authenticated student.")
+            raise HTTPException(status_code=502, detail="Lumen token refresh failed.") from exc
 
     try:
         payload = manager.fetch_progress(student_id=student_id, credential=credential)
-        if credential:
-            _lumen_credentials[student_id] = credential
-            _save_lumen_credentials()
         return payload
     except LumenAuthRequired as exc:
         connect_url = None
         if manager.client_id:
-            state = secrets.token_urlsafe(32)
-            _lumen_oauth_states[state] = {"student_id": student_id}
-            connect_url = manager.build_oauth_url(redirect_uri=_lumen_redirect_uri(), state=state)
+            try:
+                _credential_cipher()
+                state = _new_lumen_oauth_state(student_id)
+                connect_url = manager.build_oauth_url(redirect_uri=_lumen_redirect_uri(), state=state)
+            except CredentialEncryptionUnavailable:
+                raise HTTPException(
+                    status_code=503,
+                    detail="Lumen credential encryption is not configured.",
+                ) from exc
         raise HTTPException(
             status_code=403,
             detail={
@@ -344,7 +457,8 @@ def lumen_progress(
     except SyncAlreadyRunning as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Lumen progress sync failed: {exc}") from exc
+        logger.warning("Lumen progress sync failed for an authenticated student.")
+        raise HTTPException(status_code=502, detail="Lumen progress sync failed.") from exc
 
 
 @app.put("/api/tracker/progress")
@@ -429,14 +543,20 @@ def save_tracker_progress(
 
 
 @app.post("/predict", response_model=PredictionResponse)
-def predict(features: StudentFeatures):
-    """Stateless prediction - does not touch the DB."""
+def predict(features: StudentFeatures, authorization: Optional[str] = Header(None)):
+    """Return the caller's stateless demo prediction."""
+    _require_firebase_user(authorization, features.student_id)
     return _predict(features)
 
 
 @app.post("/students", response_model=StoredStudentResponse)
-def create_or_update_student(features: StudentFeatures, db: Session = Depends(get_db)):
+def create_or_update_student(
+    features: StudentFeatures,
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
     """Upsert a student's feature record and store the model's current prediction."""
+    _require_firebase_user(authorization, features.student_id)
     prediction = _predict(features)
 
     existing = db.query(StudentRecord).filter_by(student_id=features.student_id).first()
@@ -458,7 +578,12 @@ def create_or_update_student(features: StudentFeatures, db: Session = Depends(ge
 
 
 @app.get("/students/{student_id}", response_model=StoredStudentResponse)
-def get_student(student_id: str, db: Session = Depends(get_db)):
+def get_student(
+    student_id: str,
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    _require_firebase_user(authorization, student_id)
     record = db.query(StudentRecord).filter_by(student_id=student_id).first()
     if not record:
         raise HTTPException(status_code=404, detail="Student not found")
@@ -466,7 +591,12 @@ def get_student(student_id: str, db: Session = Depends(get_db)):
 
 
 @app.post("/students/{student_id}/outcome")
-def record_outcome(student_id: str, placed: int, db: Session = Depends(get_db)):
+def record_outcome(
+    student_id: str,
+    placed: int = Query(..., ge=0, le=1),
+    _admin_claims: Dict[str, Any] = Depends(require_admin_claims),
+    db: Session = Depends(get_db),
+):
     """
     Record the REAL outcome once known (placed 0/1). This is the hook for
     eventually retraining on real labels instead of synthetic ones - the
