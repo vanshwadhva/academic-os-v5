@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 import secrets
 import sys
 import tempfile
@@ -19,9 +20,18 @@ from sqlalchemy.orm import Session
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 from ml.features import build_features, feature_columns  # noqa: E402
-from backend.db import init_db, get_db, StudentRecord, TrackerProgressRecord  # noqa: E402
+from backend.db import (  # noqa: E402
+    init_db,
+    get_db,
+    LumenSyncRecord,
+    StudentProfileRecord,
+    StudentRecord,
+    TrackerProgressRecord,
+)
+from services.student_insights import build_insights  # noqa: E402
 from backend.schemas import (  # noqa: E402
     StudentFeatures,
+    StudentProfileInputs,
     PredictionResponse,
     StoredStudentResponse,
     TrackerProgressBatchUpload,
@@ -43,6 +53,10 @@ _LUMEN_CREDENTIALS_PREFIX = b"ACADEMIC_OS_FERNET_V1\n"
 logger = logging.getLogger(__name__)
 
 
+# chrome-extension://<32 lowercase a-p characters>, the form Chrome assigns to unpacked/published extensions.
+CHROME_EXTENSION_ORIGIN_RE = re.compile(r"chrome-extension://[a-p]{32}")
+
+
 def _configured_cors_origins() -> list[str]:
     defaults = [
         "http://localhost:5500",
@@ -53,8 +67,12 @@ def _configured_cors_origins() -> list[str]:
         "https://bits-dsai-tracker.firebaseapp.com",
     ]
     extra = [origin.strip() for origin in os.getenv("CORS_ORIGINS", "").split(",") if origin.strip()]
-    origins = list(dict.fromkeys(defaults + extra))
+    # Chrome extension pages send their own origin. Only IDs listed explicitly are allowed.
+    extension = [origin.strip() for origin in os.getenv("CHROME_EXTENSION_ORIGINS", "").split(",") if origin.strip()]
+    origins = list(dict.fromkeys(defaults + extra + extension))
     for origin in origins:
+        if CHROME_EXTENSION_ORIGIN_RE.fullmatch(origin):
+            continue
         parsed = urlsplit(origin)
         is_local_http = parsed.scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1"}
         if (
@@ -261,37 +279,71 @@ def _require_authenticated_student(authorization: Optional[str]) -> Dict[str, An
     return claims
 
 
-def _tracker_prediction(completion_pct: float) -> Dict[str, Any]:
-    """Mirror the tracker's displayed completion-based guidance for admin reporting."""
-    if completion_pct >= 80:
-        expected, risk, consistency, study_time = "Excellent", "Low", "Very High", "1.5–2 hrs/day"
-    elif completion_pct >= 60:
-        expected, risk, consistency, study_time = "Good", "Moderate", "High", "2–3 hrs/day"
-    elif completion_pct >= 40:
-        expected, risk, consistency, study_time = "Average", "High", "Medium", "3–4 hrs/day"
-    else:
-        expected, risk, consistency, study_time = "Needs Improvement", "High", "Low", "3–4 hrs/day"
+def _load_profile(db: Session, student_id: str) -> Dict[str, Any]:
+    record = db.query(StudentProfileRecord).filter_by(student_id=student_id).first()
+    if record is None:
+        return {}
+    try:
+        return json.loads(record.profile_json or "{}")
+    except (TypeError, ValueError):
+        return {}
 
-    return {
-        "expected_performance": expected,
-        "probability_pct": min(98, max(25, completion_pct + 10)),
-        "risk": risk,
-        "consistency": consistency,
-        "recommended_study_time": study_time,
-        "type": "completion-based heuristic",
-        "top_factors": [
-            "Course completion",
-            "Weekly consistency",
-            "Module completion rate",
-            "Pending syllabus",
-            "Study momentum",
-        ],
-    }
+
+def _compute_and_store_insights(
+    db: Session,
+    student_id: str,
+    email: str,
+    payload: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Run the placement model on the latest Lumen payload plus the student's profile, then persist both."""
+    profile = _load_profile(db, student_id)
+    insights = build_insights(_model, _importance, payload, profile)
+    record = db.query(LumenSyncRecord).filter_by(student_id=student_id).first()
+    if record is None:
+        record = LumenSyncRecord(student_id=student_id, student_email=email)
+        db.add(record)
+    if payload is not None:
+        record.payload_json = json.dumps(payload, ensure_ascii=False)
+        record.synced_at = payload.get("last_synced_at")
+    record.student_email = email
+    record.insights_json = json.dumps(insights, ensure_ascii=False)
+    db.commit()
+    return insights
+
+
+def production_config_problems() -> list[str]:
+    """
+    Settings a production deployment must have. Returned as a list so that
+    every problem is reported at once, not one restart at a time.
+    """
+    problems = []
+    database_url = os.getenv("DATABASE_URL", "")
+    if not database_url.startswith(("postgresql://", "postgres://")):
+        problems.append("DATABASE_URL must point to PostgreSQL (SQLite is local-only).")
+    if not LUMEN_CREDENTIALS_ENCRYPTION_KEY:
+        problems.append("LUMEN_CREDENTIALS_ENCRYPTION_KEY is required to store Lumen tokens.")
+    if not os.getenv("LUMEN_CLIENT_ID") or not os.getenv("LUMEN_CLIENT_SECRET"):
+        problems.append("LUMEN_CLIENT_ID and LUMEN_CLIENT_SECRET are required.")
+    if not os.getenv("FIREBASE_PROJECT_ID"):
+        problems.append("FIREBASE_PROJECT_ID must be set explicitly.")
+    if not os.getenv("ADMIN_DASHBOARD_EMAIL"):
+        problems.append("ADMIN_DASHBOARD_EMAIL must be set explicitly.")
+    redirect = os.getenv("LUMEN_REDIRECT_URI", "")
+    if not redirect.startswith("https://"):
+        problems.append("LUMEN_REDIRECT_URI must be an https:// callback URL.")
+    frontend = os.getenv("FRONTEND_URL", "")
+    if not (frontend.startswith("https://") or frontend.startswith("chrome-extension://")):
+        problems.append("FRONTEND_URL must be an https:// URL or the extension page URL.")
+    return problems
 
 
 @app.on_event("startup")
 def startup():
     global _model, _feature_cols, _importance
+    if os.getenv("APP_ENV", "development").lower() == "production":
+        problems = production_config_problems()
+        if problems:
+            raise RuntimeError("Refusing to start with invalid production configuration:\n- " + "\n- ".join(problems))
     init_db()
     _load_lumen_credentials()
     model_path = ARTIFACT_DIR / "placement_model.joblib"
@@ -342,7 +394,23 @@ def _predict(features: StudentFeatures) -> PredictionResponse:
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "model_loaded": _model is not None}
+    """Liveness and readiness: reports the database and model state. Used by the platform health check."""
+    from sqlalchemy import text
+    from backend.db import engine
+
+    database_ok = True
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+    except Exception:
+        database_ok = False
+        logger.exception("Health check: database unreachable")
+    status_value = "ok" if database_ok and _model is not None else "degraded"
+    return {
+        "status": status_value,
+        "database": "ok" if database_ok else "unreachable",
+        "model_loaded": _model is not None,
+    }
 
 
 @app.get("/api/lumen/connect-url")
@@ -409,14 +477,17 @@ def lumen_callback(
 def lumen_progress(
     student_id: str = Query(..., min_length=1, max_length=128),
     authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
 ):
     """
-    Fetch live progress from Lumen and return a dashboard-ready payload.
+    Fetch live progress from Lumen, run the placement model, and return a
+    dashboard-ready payload with an ``insights`` block.
 
     The Firebase identity must own student_id. Lumen credentials are loaded
     only from the encrypted server-side credential store.
     """
-    _require_firebase_user(authorization, student_id)
+    claims = _require_firebase_user(authorization, student_id)
+    email = str(claims.get("email") or "").strip().lower()
 
     credential = _lumen_credentials.get(student_id)
     manager = SyncManager.from_env()
@@ -432,8 +503,7 @@ def lumen_progress(
             raise HTTPException(status_code=502, detail="Lumen token refresh failed.") from exc
 
     try:
-        payload = manager.fetch_progress(student_id=student_id, credential=credential)
-        return payload
+        payload, refreshed = manager.fetch_progress_with_credential(student_id=student_id, credential=credential)
     except LumenAuthRequired as exc:
         connect_url = None
         if manager.client_id:
@@ -459,6 +529,19 @@ def lumen_progress(
     except Exception as exc:
         logger.warning("Lumen progress sync failed for an authenticated student.")
         raise HTTPException(status_code=502, detail="Lumen progress sync failed.") from exc
+    else:
+        # Persist tokens refreshed during the sync before anything else can fail.
+        if refreshed is not None:
+            try:
+                _store_lumen_credential(student_id, refreshed)
+            except CredentialEncryptionUnavailable as exc:
+                raise HTTPException(status_code=503, detail="Lumen credential encryption is not configured.") from exc
+        # A sync where every request failed has no data to show; report it as an error
+        # rather than an empty dashboard.
+        if payload.get("sync_status") == "failed":
+            raise HTTPException(status_code=502, detail="Lumen progress sync failed.")
+        payload["insights"] = _compute_and_store_insights(db, student_id, email, payload)
+        return payload
 
 
 @app.put("/api/tracker/progress")
@@ -490,7 +573,6 @@ def save_tracker_progress(
         total_modules = len(module_states)
         completed_modules = sum(1 for is_complete in module_states if is_complete)
         completion_pct = round((completed_modules / total_modules) * 100, 1) if total_modules else 0.0
-        prediction = _tracker_prediction(completion_pct)
 
         record = db.query(TrackerProgressRecord).filter_by(
             student_id=student_id,
@@ -524,7 +606,9 @@ def save_tracker_progress(
         record.completed_modules = completed_modules
         record.completion_pct = completion_pct
         record.courses_json = json.dumps(courses, ensure_ascii=False)
-        record.prediction_json = json.dumps(prediction, ensure_ascii=False)
+        # Predictions come from the placement model via /api/students/me/insights.
+        # Tracker snapshots no longer carry a separate heuristic prediction.
+        record.prediction_json = "{}"
         record.lumen_synced_at = snapshot.lumen_synced_at or record.lumen_synced_at
         updated_snapshots.append({
             "trimester_id": snapshot.trimester_id,
@@ -540,6 +624,65 @@ def save_tracker_progress(
         "email": email,
         "snapshots": updated_snapshots,
     }
+
+
+@app.get("/api/students/me/profile")
+def get_my_profile(
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    """Return the signed-in student's self-reported model inputs."""
+    claims = _require_authenticated_student(authorization)
+    return {"student_id": claims["sub"], "profile": _load_profile(db, claims["sub"])}
+
+
+@app.put("/api/students/me/profile")
+def put_my_profile(
+    inputs: StudentProfileInputs,
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    """
+    Replace the signed-in student's self-reported inputs and recompute their
+    prediction from the stored Lumen payload. Omitted fields are cleared and
+    fall back to the imputed training median.
+    """
+    claims = _require_authenticated_student(authorization)
+    student_id = claims["sub"]
+    email = str(claims.get("email") or "").strip().lower()
+
+    profile = inputs.model_dump(exclude_none=True)
+    record = db.query(StudentProfileRecord).filter_by(student_id=student_id).first()
+    if record is None:
+        record = StudentProfileRecord(student_id=student_id, student_email=email)
+        db.add(record)
+    record.student_email = email
+    record.profile_json = json.dumps(profile, ensure_ascii=False)
+    db.commit()
+
+    lumen_record = db.query(LumenSyncRecord).filter_by(student_id=student_id).first()
+    payload = None
+    if lumen_record is not None and lumen_record.payload_json not in (None, "", "{}"):
+        payload = json.loads(lumen_record.payload_json)
+    insights = _compute_and_store_insights(db, student_id, email, payload)
+    return {"student_id": student_id, "profile": profile, "insights": insights}
+
+
+@app.get("/api/students/me/insights")
+def get_my_insights(
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    """Return the latest stored prediction for the signed-in student."""
+    claims = _require_authenticated_student(authorization)
+    record = db.query(LumenSyncRecord).filter_by(student_id=claims["sub"]).first()
+    if record is None:
+        return {
+            "status": "awaiting_lumen",
+            "message": "Connect Lumen to base the prediction on your course activity.",
+            "disclaimer": None,
+        }
+    return json.loads(record.insights_json or "{}")
 
 
 @app.post("/predict", response_model=PredictionResponse)

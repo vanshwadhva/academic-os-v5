@@ -1,0 +1,40 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isVerifiedBitsStudent(userId) {
+      return request.auth != null
+        && request.auth.uid == userId
+        && request.auth.token.email_verified == true
+        && request.auth.token.email.matches('^[^@]+@bitspilani-digital\\.edu\\.in$');
+    }
+
+    function isAllowedTrackerPath(appId, progressDoc) {
+      return appId in ['dsp-bits-tracker', 'msc-dsai-tracker']
+        && progressDoc == 'trackerData';
+    }
+
+    match /artifacts/{appId}/users/{userId}/progress/{progressDoc} {
+      allow get: if isVerifiedBitsStudent(userId)
+        && isAllowedTrackerPath(appId, progressDoc);
+      allow list: if false;
+
+      allow create, update: if isVerifiedBitsStudent(userId)
+        && isAllowedTrackerPath(appId, progressDoc)
+        && request.resource.data.keys().hasOnly([
+          'progress',
+          'lumenProgress',
+          'legacyProgressImported',
+          'updatedAt'
+        ])
+        && request.resource.data.keys().hasAll(['progress'])
+        && request.resource.data.progress is map;
+
+      allow delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

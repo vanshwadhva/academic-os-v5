@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements-dev.txt
+      - name: Test
+        run: python -m pytest tests/unit tests/integration -q
+
+  frontend-and-extension:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Syntax-check frontend scripts
+        run: |
+          for f in frontend/js/*.js frontend/config.js extension/background.js; do
+            node --check "$f"
+          done
+      - name: Build extension (runs the CSP check) and zip it
+        run: |
+          python scripts/build_extension.py \
+            --api-url https://api.example.com \
+            --google-client-id ci-check.apps.googleusercontent.com \
+            --zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: extension-ci-build
+          path: extension/*.zip
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build API image
+        run: docker build -t academic-os-api:ci .

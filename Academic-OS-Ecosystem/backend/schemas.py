@@ -2,6 +2,17 @@ from typing import Optional, List
 from pydantic import BaseModel, Field
 
 
+class StudentProfileInputs(BaseModel):
+    """Self-reported model inputs. Every field is optional; missing ones are imputed and labelled as such."""
+    aptitude_score: Optional[float] = Field(default=None, ge=0, le=100)
+    communication_score: Optional[float] = Field(default=None, ge=0, le=100)
+    trimester_gpa: Optional[float] = Field(default=None, ge=0, le=10)
+    backlogs_count: Optional[int] = Field(default=None, ge=0, le=100)
+    projects_count: Optional[int] = Field(default=None, ge=0, le=100)
+    internships_count: Optional[int] = Field(default=None, ge=0, le=100)
+    mock_interviews_attended: Optional[int] = Field(default=None, ge=0, le=1000)
+
+
 class StudentFeatures(BaseModel):
     student_id: str = Field(min_length=1, max_length=128)
     preferred_study_hour: int = Field(ge=0, le=23)

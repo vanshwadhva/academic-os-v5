@@ -60,3 +60,5 @@ build/
 dist/
 .DS_Store
 /archive/
+extension/dist/
+extension/*.zip

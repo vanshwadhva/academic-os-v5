@@ -64,7 +64,7 @@ import uuid
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from .lumen_client import LumenClient
 from .lumen_courses import LumenCourses
@@ -214,6 +214,11 @@ class SyncResult:
     domain_errors:     Dict[str, str] = field(default_factory=dict)
     error_message:     Optional[str] = None
 
+    # Set only when the sync refreshed the access token. The caller must
+    # persist it: Brightspace may rotate refresh tokens, so keeping the old
+    # one would break the next login. Never serialised (see to_dict).
+    refreshed_credential: Optional["LumenCredential"] = field(default=None, repr=False)
+
     @property
     def duration_seconds(self) -> Optional[float]:
         if self.ended_at:
@@ -227,6 +232,7 @@ class SyncResult:
 
     def to_dict(self) -> Dict[str, Any]:
         d = asdict(self)
+        d.pop("refreshed_credential", None)  # never serialise tokens
         d["status"]  = self.status.value
         d["trigger"] = self.trigger.value
         d["duration_seconds"] = self.duration_seconds
@@ -290,12 +296,18 @@ class LumenCredential:
 
     def is_expired(self) -> bool:
         """Return True if the token is past its lifetime (with 5-min buffer)."""
+        return self.remaining_seconds() <= 300
+
+    def remaining_seconds(self) -> int:
+        """Seconds left before the access token expires (0 if unknown or past expiry)."""
         try:
             issued = datetime.fromisoformat(self.issued_at)
-            age    = (datetime.now(tz=timezone.utc) - issued).total_seconds()
-            return age >= (self.expires_in - 300)
+            if issued.tzinfo is None:
+                issued = issued.replace(tzinfo=timezone.utc)
+            age = (datetime.now(tz=timezone.utc) - issued).total_seconds()
+            return max(0, int(self.expires_in - age))
         except Exception:
-            return True
+            return 0
 
     @classmethod
     def from_oauth_response(cls, data: Dict[str, Any]) -> "LumenCredential":
@@ -499,6 +511,7 @@ class SyncManager:
             student_id, sync_job_id, trigger.value, correlation_id,
         )
 
+        client: Optional[LumenClient] = None
         try:
             client = self._build_client(credential)
             self._maybe_resolve_lms_user_id(client, result)
@@ -519,6 +532,18 @@ class SyncManager:
             result.error_message = str(exc)
 
         finally:
+            # Capture tokens refreshed mid-sync even if the sync failed later.
+            refreshed = client.export_refreshed_tokens() if client is not None else None
+            if refreshed:
+                access_token, refresh_token, seconds_left = refreshed
+                result.refreshed_credential = LumenCredential(
+                    access_token=access_token,
+                    expires_in=max(1, seconds_left),
+                    lms_user_id=result.lms_user_id or credential.lms_user_id,
+                    refresh_token=refresh_token,
+                    auth_type=credential.auth_type,
+                    issued_at=_utcnow(),
+                )
             result.ended_at = _utcnow()
             _release_sync_lock(student_id)
             logger.info(
@@ -548,10 +573,12 @@ class SyncManager:
             client_secret = self.client_secret,
             encryption_key= self.encryption_key,
         )
-        # Seed the token — LumenClient will refresh when it expires
+        # Seed the token with its REMAINING lifetime. ``expires_in`` on the
+        # credential is the original lifetime, so using it directly would
+        # overstate validity by however long ago the token was issued.
         client.set_access_token(
             access_token  = credential.access_token,
-            expires_in    = max(1, credential.expires_in - 300),  # 5-min safety buffer
+            expires_in    = credential.remaining_seconds(),
             refresh_token = credential.refresh_token,
         )
         return client
@@ -573,8 +600,8 @@ class SyncManager:
             result.lms_user_id = str(whoami.get("UserId") or whoami.get("Identifier", ""))
             logger.debug("Resolved LMS user ID: %s", result.lms_user_id)
         except Exception as exc:
-            logger.warning("Could not resolve LMS user ID: %s", exc)
-            result.domain_errors["whoami"] = str(exc)
+            # Diagnostic only: the student-context endpoints do not need the ID.
+            logger.debug("Could not resolve LMS user ID: %s", exc)
 
     # ------------------------------------------------------------------
     # Course-level orchestration
@@ -593,7 +620,7 @@ class SyncManager:
 
         try:
             raw_courses = courses_service.get_enrolled_courses(
-                user_id=result.lms_user_id or None
+                user_id=None
             )
         except Exception as exc:
             logger.error("Failed to fetch course list: %s", exc)
@@ -611,13 +638,14 @@ class SyncManager:
         )
 
         for raw_course in raw_courses:
-            course_id   = str(raw_course.get("course_id", ""))
-            course_name = raw_course.get("course_name", "Unknown")
-            course_code = raw_course.get("course_code", "")
+            course_id   = raw_course.get("course_id")
+            course_name = raw_course.get("course_name") or raw_course.get("course_code") or "Untitled course"
+            course_code = raw_course.get("course_code") or ""
 
-            if not course_id:
+            if course_id in (None, ""):
                 logger.warning("Skipping course with no ID: %s", raw_course)
                 continue
+            course_id = str(course_id)
 
             snapshot = CourseSnapshot(
                 course_id   = course_id,
@@ -651,16 +679,20 @@ class SyncManager:
             try:
                 topic_progress = modules_service.get_course_topic_progress(
                     course_id,
-                    user_id=result.lms_user_id,
+                    user_id=None,
                 )
                 modules = modules_service.apply_topic_progress(modules, topic_progress)
                 topic_progress_available = True
             except Exception as progress_exc:
                 result.domain_errors[f"module_progress:{domain_pfx}"] = str(progress_exc)
 
-            completion      = modules_service.get_content_completion(
-                course_id, user_id=result.lms_user_id
-            )
+            # Completion totals are optional: a tenant that 404s here must not
+            # discard the lecture list that was already fetched above.
+            completion: Dict[str, Any] = {}
+            try:
+                completion = modules_service.get_content_completion(course_id, user_id=None)
+            except Exception as completion_exc:
+                result.domain_errors[f"module_completion:{domain_pfx}"] = str(completion_exc)
             snapshot.modules = modules
             snapshot.module_progress_available = topic_progress_available
             snapshot.modules_total     = len(modules)
@@ -693,7 +725,7 @@ class SyncManager:
         try:
             grades_service = LumenGrades(client)
             grade_values   = grades_service.get_grade_values(
-                course_id, user_id=result.lms_user_id
+                course_id, user_id=None
             )
             snapshot.grades = grade_values
             result.records_fetched += len(grade_values)
@@ -719,7 +751,7 @@ class SyncManager:
                     submissions = assignments_service.get_assignment_submissions(
                         course_id,
                         str(assignment_id),
-                        user_id=result.lms_user_id,
+                        user_id=None,
                     )
                     assignment["submissions"] = submissions
                     submitted_entries = [
@@ -755,7 +787,7 @@ class SyncManager:
             quiz_service  = QuizService(client)
             quiz_records  = quiz_service.get_full_quiz_sync(
                 course_id,
-                user_id           = result.lms_user_id,
+                user_id           = None,
                 include_statistics= True,
             )
             snapshot.quizzes = [
@@ -784,7 +816,7 @@ class SyncManager:
 
         # ── Attendance (optional — gracefully absent) ────────────────────────
         try:
-            attendance = self._fetch_attendance(client, course_id, result.lms_user_id)
+            attendance = self._fetch_attendance(client, course_id, None)
             if attendance is not None:
                 snapshot.attendance = attendance
                 result.records_fetched += 1
@@ -873,12 +905,25 @@ class SyncManager:
         credential: Optional[LumenCredential],
     ) -> Dict[str, Any]:
         """Fetch the latest LMS progress and return a dashboard-ready payload."""
+        payload, _refreshed = self.fetch_progress_with_credential(student_id, credential)
+        return payload
+
+    def fetch_progress_with_credential(
+        self,
+        student_id: str,
+        credential: Optional[LumenCredential],
+    ) -> Tuple[Dict[str, Any], Optional[LumenCredential]]:
+        """
+        Like ``fetch_progress`` but also returns a credential refreshed during the
+        sync (or None). The caller must persist it, or the student's next sync
+        may fail with an invalidated refresh token.
+        """
         result = self.run_full_sync(
             student_id=student_id,
             credential=credential,
             trigger=SyncTrigger.MANUAL,
         )
-        return result.to_dashboard_payload()
+        return result.to_dashboard_payload(), result.refreshed_credential
 
     # ------------------------------------------------------------------
     # OAuth2 helpers (called by the auth callback route, not the sync)

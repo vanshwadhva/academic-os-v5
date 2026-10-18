@@ -67,6 +67,32 @@ class TrackerProgressRecord(Base):
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
+class StudentProfileRecord(Base):
+    """Self-reported inputs the model needs that Lumen does not provide."""
+    __tablename__ = "student_profiles"
+
+    student_id = Column(String, primary_key=True)
+    student_email = Column(String, nullable=False)
+    profile_json = Column(Text, nullable=False, default="{}")
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class LumenSyncRecord(Base):
+    """Latest Lumen sync payload and the prediction derived from it, per student.
+
+    The payload holds course activity only. OAuth tokens live in the encrypted
+    credential store and are never written here.
+    """
+    __tablename__ = "lumen_sync_records"
+
+    student_id = Column(String, primary_key=True)
+    student_email = Column(String, nullable=False)
+    payload_json = Column(Text, nullable=False, default="{}")
+    insights_json = Column(Text, nullable=False, default="{}")
+    synced_at = Column(String, nullable=True)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
 def init_db():
     Base.metadata.create_all(bind=engine)
 

@@ -1,8 +1,29 @@
 (() => {
+  // Display-only gate. The backend is the enforcement point: /api/admin/dashboard/*
+  // verifies the Firebase ID token and accepts only this verified email.
   const ADMIN_EMAIL = "2025em1300265@bitspilani-digital.edu.in";
-  const API_BASE_URL = (window.API_URL || "https://academic-os-api.onrender.com")
+  const API_BASE_URL = (window.APP_CONFIG?.API_URL || "https://academic-os-api.onrender.com")
     .replace(/\/predict\/?$/, "")
     .replace(/\/$/, "");
+
+  const INPUT_LABELS = {
+    preferred_study_hour: "Preferred study hour",
+    weekly_study_hours: "Weekly study hours",
+    consistency_score: "Consistency",
+    attendance_pct: "Attendance %",
+    backlogs_count: "Backlogs",
+    aptitude_score: "Aptitude",
+    avg_quiz_score: "Avg quiz score",
+    quiz_score_std: "Quiz score spread",
+    assignment_avg: "Graded-item average",
+    trimester_gpa: "Trimester GPA",
+    modules_completed_pct: "Modules completed %",
+    communication_score: "Communication",
+    projects_count: "Projects",
+    internships_count: "Internships",
+    mock_interviews_attended: "Mock interviews",
+  };
+  const SOURCE_LABELS = { lumen: "Lumen", self_reported: "Self-reported", imputed: "Default (no data)" };
 
   const state = {
     root: null,
@@ -91,26 +112,25 @@
   function renderDashboard(data) {
     const users = data.users || [];
     const cohortSize = data.cohort_size || 250;
-    const trackedStudents = Number(data.tracker_students || 0);
-    const completedModules = Number(data.tracker_completed_modules || 0);
-    const totalModules = Number(data.tracker_total_modules || 0);
-    const atRisk = Number(data.at_risk_count || 0);
+    const linked = users.filter(user => user.lumen).length;
+    const predicted = users.filter(user => user.ml_prediction?.status === "ready").length;
+    const atRisk = users.filter(user => user.ml_prediction?.risk_band === "High likelihood").length;
 
     setStatus(
-      `Verified admin: ${data.viewer?.email || ADMIN_EMAIL}. Showing ${trackedStudents} students with tracker snapshots across ${Number(data.tracker_snapshot_count || 0)} trimester records.`,
+      `Verified admin: ${data.viewer?.email || ADMIN_EMAIL}. ${users.length} student records · ${linked} with Lumen data · ${predicted} with a model prediction.`,
       "success"
     );
 
     state.summary.innerHTML = `
-      ${summaryCard("Students Tracking", `${trackedStudents}/${cohortSize}`, percent(trackedStudents, cohortSize), "var(--done)")}
-      ${summaryCard("Average Progress", formatPct(data.average_modules_completed_pct), data.average_modules_completed_pct || 0, "var(--sm-color)")}
-      ${summaryCard("Modules Completed", `${completedModules}/${totalModules}`, percent(completedModules, totalModules), "var(--dv-color)")}
-      ${summaryCard("At Risk", atRisk, percent(atRisk, trackedStudents || 1), "var(--overdue)")}
+      ${summaryCard("Students", `${users.length}/${cohortSize}`, percent(users.length, cohortSize), "var(--done)")}
+      ${summaryCard("Lumen linked", `${linked}`, percent(linked, users.length || 1), "var(--sm-color)")}
+      ${summaryCard("Predictions ready", `${predicted}`, percent(predicted, users.length || 1), "var(--dv-color)")}
+      ${summaryCard("High likelihood (model)", `${atRisk}`, percent(atRisk, predicted || 1), "var(--overdue)")}
     `;
 
     state.table.innerHTML = users.length
       ? users.map(renderUserRow).join("")
-      : `<tr><td colspan="18" class="admin-dashboard__empty">No student tracker snapshots are available yet. Student data appears after sign-in and the first trimester sync.</td></tr>`;
+      : `<tr><td colspan="7" class="admin-dashboard__empty">No student records yet. Records appear after a student signs in and syncs Lumen or saves tracker progress.</td></tr>`;
   }
 
   function summaryCard(label, value, barValue, color) {
@@ -126,58 +146,98 @@
   }
 
   function renderUserRow(user) {
-    const progress = user.progress || {};
-    const prediction = user.prediction || {};
-    const completion = numeric(progress.modules_completed_pct);
-
     return `
       <tr>
         <td>
           <div class="admin-dashboard__student">${escapeHtml(user.email || user.student_id)}</div>
-          <div class="admin-dashboard__subtext">${escapeHtml(user.email ? user.student_id : "BITS signup record")}</div>
+          <div class="admin-dashboard__subtext">${escapeHtml(user.student_id)}</div>
         </td>
-        <td>${progressBarCell(completion)}</td>
-        <td>${formatPct(progress.attendance_pct)}</td>
-        <td>${formatPct(progress.avg_quiz_score)}</td>
-        <td>${formatPct(progress.assignment_avg)}</td>
-        <td>${formatNumber(progress.weekly_study_hours, 1)}</td>
-        <td>${formatDecimalScore(progress.consistency_score)}</td>
-        <td>${formatNumber(progress.aptitude_score, 1)}</td>
-        <td>${formatNumber(progress.trimester_gpa, 2)}</td>
-        <td>${formatNumber(progress.communication_score, 1)}</td>
-        <td>${formatInteger(progress.projects_count)}</td>
-        <td>${formatInteger(progress.internships_count)}</td>
-        <td>${formatInteger(progress.mock_interviews_attended)}</td>
-        <td>${formatInteger(progress.backlogs_count)}</td>
-        <td>${escapeHtml(prediction.risk_band || "Not predicted")}</td>
-        <td>${renderTrackerPrediction(user.tracker_progress || [])}</td>
+        <td>${renderLumenStatus(user.lumen)}</td>
+        <td>${renderCourses(user.lumen)}</td>
+        <td>${renderPrediction(user.ml_prediction)}</td>
+        <td>${renderProfile(user.profile)}</td>
         <td class="admin-dashboard__tracker-cell">${renderTrackerProgress(user.tracker_progress || [])}</td>
         <td>${formatDate(user.updated_at)}</td>
       </tr>
     `;
   }
 
-  function renderTrackerPrediction(terms) {
-    const predictions = terms.filter(term => term.prediction?.expected_performance);
-    if (!predictions.length) {
-      return `<span class="admin-dashboard__subtext">No tracker prediction yet</span>`;
-    }
+  function renderLumenStatus(lumen) {
+    if (!lumen) return `<span class="admin-dashboard__subtext">Lumen not connected</span>`;
+    const errors = Object.keys(lumen.domain_errors || {}).length;
+    return `
+      <div>${escapeHtml(lumen.sync_status || "unknown")}</div>
+      <div class="admin-dashboard__subtext">Synced ${formatDate(lumen.last_synced_at)}</div>
+      <div class="admin-dashboard__subtext">${(lumen.courses || []).length} courses${errors ? ` · ${errors} fetch errors` : ""}</div>
+    `;
+  }
 
-    return predictions.map(term => {
-      const prediction = term.prediction;
-      const topFactors = (prediction.top_factors || []).map(factor => `<li>${escapeHtml(factor)}</li>`).join("");
+  function renderCourses(lumen) {
+    const courses = lumen?.courses || [];
+    if (!courses.length) return `<span class="admin-dashboard__subtext">No course data</span>`;
+    return courses.map(course => {
+      const quizzes = (course.quizzes || []).map(q => `<li>${escapeHtml(q.quiz_name || "Quiz")}: ${escapeHtml(q.status || "-")} · ${formatPct(q.percentage)}</li>`).join("");
+      const grades = (course.grades || []).map(g => `<li>${escapeHtml(g.grade_item_id ?? "Item")}: ${formatPct(g.percentage)}</li>`).join("");
+      const assignments = (course.assignments || []).map(a => `<li>${escapeHtml(a.name || a.assignment_id || "Assignment")}: ${escapeHtml(a.submission_status || "-")}</li>`).join("");
+      const modules = (course.modules || []).map(m => `
+        <li class="${m.visited || m.is_read || m.completed ? "is-complete" : "is-pending"}">
+          <span aria-hidden="true">${m.visited || m.is_read || m.completed ? "✓" : "○"}</span>
+          ${escapeHtml(m.title || "Lecture")}${m.module_path ? ` <span class="admin-dashboard__subtext">${escapeHtml(m.module_path)}</span>` : ""}
+          ${m.last_visited ? `<span class="admin-dashboard__subtext">last ${formatDate(m.last_visited)}</span>` : ""}
+        </li>`).join("");
       return `
-        <div class="admin-dashboard__tracker-prediction">
-          <strong>${escapeHtml(term.trimester_name || `Trimester ${term.trimester_id}`)} · ${escapeHtml(prediction.expected_performance)}</strong>
-          <span>Probability: ${formatPct(prediction.probability_pct)}</span>
-          <span>Risk: ${escapeHtml(prediction.risk || "-")}</span>
-          <span>Consistency: ${escapeHtml(prediction.consistency || "-")}</span>
-          <span>Study time: ${escapeHtml(prediction.recommended_study_time || "-")}</span>
-          <span class="admin-dashboard__subtext">${escapeHtml(prediction.type || "")}</span>
-          ${topFactors ? `<details><summary>Factors</summary><ul>${topFactors}</ul></details>` : ""}
-        </div>
-      `;
+        <div class="admin-dashboard__course">
+          <div class="admin-dashboard__course-heading">
+            <strong>${escapeHtml(course.course_name || course.course_code || `Course ${course.course_id}`)}</strong>
+            <span>${formatPct(course.overall_progress_pct)}</span>
+          </div>
+          <div class="admin-dashboard__subtext">
+            Lectures ${formatInteger(course.modules_completed)}/${formatInteger(course.modules_total)} ·
+            Attendance ${formatPct(course.attendance?.attendance_pct)} ·
+            Quizzes ${(course.quizzes || []).length} · Grades ${(course.grades || []).length} · Assignments ${(course.assignments || []).length}
+          </div>
+          <details class="admin-dashboard__module-details">
+            <summary>View lectures, quizzes, grades and assignments</summary>
+            <div class="admin-dashboard__subtext">Lectures</div>
+            <ul class="admin-dashboard__week-list">${modules || "<li>No lectures returned.</li>"}</ul>
+            <div class="admin-dashboard__subtext">Quizzes</div>
+            <ul class="admin-dashboard__week-list">${quizzes || "<li>No quizzes returned.</li>"}</ul>
+            <div class="admin-dashboard__subtext">Grades</div>
+            <ul class="admin-dashboard__week-list">${grades || "<li>No grades returned.</li>"}</ul>
+            <div class="admin-dashboard__subtext">Assignments</div>
+            <ul class="admin-dashboard__week-list">${assignments || "<li>No assignments returned.</li>"}</ul>
+          </details>
+        </div>`;
     }).join("");
+  }
+
+  function renderPrediction(insights) {
+    if (!insights || !insights.status) return `<span class="admin-dashboard__subtext">Not computed</span>`;
+    if (insights.status !== "ready") {
+      return `<span class="admin-dashboard__subtext">${escapeHtml(insights.message || insights.status)}</span>`;
+    }
+    const coverage = insights.coverage || {};
+    const inputs = Object.entries(insights.inputs || {}).map(([key, input]) => `
+      <li>${escapeHtml(INPUT_LABELS[key] || key)}: <strong>${escapeHtml(formatInputValue(input.value))}</strong>
+        <span class="admin-dashboard__subtext">${escapeHtml(SOURCE_LABELS[input.source] || input.source)}</span></li>`).join("");
+    const factors = (insights.top_factors || []).map(factor => `<li>${escapeHtml(factor.feature)}</li>`).join("");
+    return `
+      <div><strong>${formatPct(insights.placement_probability * 100)}</strong> · ${escapeHtml(insights.risk_band || "-")}</div>
+      <div class="admin-dashboard__subtext">Inputs: ${coverage.lumen ?? 0} Lumen · ${coverage.self_reported ?? 0} self-reported · ${coverage.imputed ?? 0} default</div>
+      <div class="admin-dashboard__subtext">Synthetic-data model, not validated</div>
+      <details class="admin-dashboard__module-details">
+        <summary>Model inputs and top factors</summary>
+        <ul class="admin-dashboard__week-list">${inputs}</ul>
+        <div class="admin-dashboard__subtext">Top factors</div>
+        <ul class="admin-dashboard__week-list">${factors}</ul>
+      </details>`;
+  }
+
+  function renderProfile(profile) {
+    const entries = Object.entries(profile || {});
+    if (!entries.length) return `<span class="admin-dashboard__subtext">Not provided</span>`;
+    return `<ul class="admin-dashboard__week-list">${entries.map(([key, value]) =>
+      `<li>${escapeHtml(INPUT_LABELS[key] || key)}: ${escapeHtml(value)}</li>`).join("")}</ul>`;
   }
 
   function renderTrackerProgress(terms) {
@@ -185,7 +245,6 @@
 
     return terms.map((term) => {
       const completion = clamp(term.completion_pct);
-      const courses = (term.courses || []).map(renderTrackerCourse).join("");
       const syncLabel = term.lumen_synced_at
         ? `Lumen synced ${formatDate(term.lumen_synced_at)}`
         : "No Lumen sync recorded";
@@ -197,77 +256,9 @@
           </div>
           <div class="admin-dashboard__tracker-bar"><div style="width:${completion}%"></div></div>
           <div class="admin-dashboard__subtext">${formatInteger(term.completed_modules)} / ${formatInteger(term.total_modules)} modules · ${escapeHtml(syncLabel)}</div>
-          <div class="admin-dashboard__tracker-courses">${courses}</div>
         </section>
       `;
     }).join("");
-  }
-
-  function renderTrackerCourse(course) {
-    const weeks = course.weeks || [];
-    const lumen = course.lumen_progress;
-    const modules = weeks.flatMap(week => week.modules || []);
-    const total = modules.length;
-    const completed = modules.filter(module => module.completed).length;
-    const completion = total ? (completed / total) * 100 : 0;
-    const moduleDetails = weeks.map(week => `
-      <li class="admin-dashboard__week">
-        <strong>Week ${escapeHtml(week.week_label || "-")}${week.topic ? ` · ${escapeHtml(week.topic)}` : ""}</strong>
-        <ul>${(week.modules || []).map(module => `
-          <li class="${module.completed ? "is-complete" : "is-pending"}">
-            <span aria-hidden="true">${module.completed ? "✓" : "○"}</span> ${escapeHtml(module.title)}
-          </li>
-        `).join("")}</ul>
-      </li>
-    `).join("");
-    const lumenActivities = lumen?.activities || [];
-    const lumenDetails = lumenActivities.map(activity => `
-      <li class="${activity.completed ? "is-complete" : "is-pending"}">
-        <span aria-hidden="true">${activity.completed ? "✓" : "○"}</span>
-        ${escapeHtml(activity.kind)}: ${escapeHtml(activity.title)}
-        <span>${escapeHtml(activity.status)}${activity.score_pct === null || activity.score_pct === undefined ? "" : ` · ${formatPct(activity.score_pct)}`}</span>
-      </li>
-    `).join("");
-    const lumenHtml = lumen ? `
-      <div class="admin-dashboard__lumen-progress">
-        <div class="admin-dashboard__course-heading">
-          <strong>Lumen activity</strong>
-          <span>${formatPct(lumen.completion_pct)}</span>
-        </div>
-        <div class="admin-dashboard__tracker-bar is-course"><div style="width:${clamp(lumen.completion_pct)}%"></div></div>
-        <div class="admin-dashboard__subtext">${lumen.lecture_status_available === false ? "Lumen content complete" : "Lectures viewed"} ${formatInteger(lumen.lectures_viewed)}/${formatInteger(lumen.lectures_total)} · Quizzes ${formatInteger(lumen.quizzes_completed)}/${formatInteger(lumen.quizzes_total)} · Assignments ${formatInteger(lumen.assignments_submitted)}/${formatInteger(lumen.assignments_total)}</div>
-        <details class="admin-dashboard__module-details">
-          <summary>${formatInteger(lumenActivities.filter(activity => activity.completed).length)}/${formatInteger(lumenActivities.length)} Lumen activities complete · View statuses</summary>
-          <ul class="admin-dashboard__week-list">${lumenDetails || "<li>No Lumen activities returned.</li>"}</ul>
-        </details>
-      </div>
-    ` : `<div class="admin-dashboard__subtext">Lumen activity not synced</div>`;
-
-    return `
-      <div class="admin-dashboard__course">
-        <div class="admin-dashboard__course-heading">
-          <strong>${escapeHtml(course.course_name || course.course_id)}</strong>
-          <span>${formatPct(completion)}</span>
-        </div>
-        <div class="admin-dashboard__tracker-bar is-course"><div style="width:${clamp(completion)}%"></div></div>
-        ${lumenHtml}
-        <details class="admin-dashboard__module-details">
-          <summary>${completed}/${total} modules complete · View module statuses</summary>
-          <ul class="admin-dashboard__week-list">${moduleDetails}</ul>
-        </details>
-      </div>
-    `;
-  }
-
-  function progressBarCell(value) {
-    return `
-      <div class="admin-dashboard__progress">
-        <span>${formatPct(value)}</span>
-        <div class="mini-bar">
-          <div class="mini-bar-fill" style="width:${clamp(value)}%;background:var(--done);"></div>
-        </div>
-      </div>
-    `;
   }
 
   function setStatus(message, tone) {
@@ -304,22 +295,16 @@
     return `${number.toFixed(1)}%`;
   }
 
-  function formatNumber(value, digits) {
-    const number = numeric(value);
-    if (number === null) return "-";
-    return number.toFixed(digits);
-  }
-
-  function formatDecimalScore(value) {
-    const number = numeric(value);
-    if (number === null) return "-";
-    return number <= 1 ? number.toFixed(2) : number.toFixed(1);
-  }
-
   function formatInteger(value) {
     const number = numeric(value);
     if (number === null) return "-";
     return String(Math.round(number));
+  }
+
+  function formatInputValue(value) {
+    const number = numeric(value);
+    if (number === null) return "-";
+    return Number.isInteger(number) ? String(number) : number.toFixed(2);
   }
 
   function formatDate(value) {

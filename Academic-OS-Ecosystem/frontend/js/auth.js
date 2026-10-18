@@ -23,15 +23,11 @@ const firebaseConfig = {
 export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 const provider = new GoogleAuthProvider();
+localStorage.removeItem("firebaseToken");
 
 export async function loginWithGoogle() {
   const result = await signInWithPopup(auth, provider);
-  const user = result.user;
-
-  const token = await user.getIdToken();
-  localStorage.setItem("firebaseToken", token);
-
-  return user;
+  return result.user;
 }
 
 export async function logout() {
@@ -40,16 +36,7 @@ export async function logout() {
 }
 
 export function subscribeAuth(callback) {
-  return onAuthStateChanged(auth, async (user) => {
-    if (user) {
-      const token = await user.getIdToken();
-      localStorage.setItem("firebaseToken", token);
-    } else {
-      localStorage.removeItem("firebaseToken");
-    }
-
-    callback(user);
-  });
+  return onAuthStateChanged(auth, callback);
 }
 
 export async function getFirebaseIdToken(forceRefresh = false) {
@@ -57,7 +44,5 @@ export async function getFirebaseIdToken(forceRefresh = false) {
   if (!user) {
     throw new Error("NOT_SIGNED_IN");
   }
-  const token = await user.getIdToken(forceRefresh);
-  localStorage.setItem("firebaseToken", token);
-  return token;
+  return user.getIdToken(forceRefresh);
 }

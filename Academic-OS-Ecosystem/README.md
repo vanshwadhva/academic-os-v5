@@ -29,10 +29,12 @@ Serve `frontend/` over HTTP during local development. Firebase Hosting is config
 firebase deploy --only hosting
 ```
 
-The root Dockerfile and Compose file also live here, so run `docker compose up --build` from this folder when using the container setup.
+Firestore access rules are in `firestore.rules`; deploy them separately with `firebase deploy --only firestore:rules`. They allow verified BITS accounts to access only their own tracker documents and deny all other client access.
+
+For the Compose setup, copy `deployment/.env.example` to `.env`, replace the placeholder database password, and generate a Fernet key using the command in the example file. Keep the populated `.env` outside GitHub. Then run `docker compose up --build` from this folder. Compose binds Postgres to localhost only and stores encrypted Lumen credentials in a named volume.
 
 ## Data and deployment safety
 
-Keep production credentials and local databases out of GitHub. `.gitignore` excludes SQLite files, `.env` files, Lumen credential files, local archives, and deployment caches. The existing `placement.db` remains beside `backend/`, matching the backend's default SQLite path; it is excluded from GitHub and Docker builds.
+Keep production credentials and local databases out of GitHub. `.gitignore` excludes SQLite files, `.env` files, Lumen credential files, local archives, and deployment caches. Lumen OAuth is disabled until `LUMEN_CREDENTIALS_ENCRYPTION_KEY` is configured; the service encrypts credentials at rest and refuses to save them without that key. Back up the key in a secret manager: without it, saved Lumen credentials cannot be decrypted.
 
 Lumen sync requires the backend environment variables and OAuth app setup described in `docs/DEPLOYMENT.md` and `docs/LMS_INTEGRATION.md`.

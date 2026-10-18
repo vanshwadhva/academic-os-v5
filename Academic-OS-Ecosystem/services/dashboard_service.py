@@ -41,6 +41,33 @@ FIREBASE_CERTS_URL = (
 )
 
 
+ADMIN_PROGRESS_KEYS = (
+    "modules_completed_pct",
+    "attendance_pct",
+    "avg_quiz_score",
+    "assignment_avg",
+    "weekly_study_hours",
+    "consistency_score",
+    "preferred_study_hour",
+    "backlogs_count",
+    "aptitude_score",
+    "quiz_score_std",
+    "trimester_gpa",
+    "communication_score",
+    "projects_count",
+    "internships_count",
+    "mock_interviews_attended",
+)
+
+
+def _safe_json(raw: Optional[str]) -> Dict[str, Any]:
+    try:
+        value = json.loads(raw or "{}")
+    except (TypeError, ValueError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
 class AdminAccessDenied(Exception):
     """Raised when a caller is not allowed to view the admin dashboard."""
 
@@ -804,6 +831,8 @@ class DashboardService:
             ):
                 student_terms[record.trimester_id] = record
 
+        self._merge_lumen_records(db_session, users_by_id)
+
         users = list(users_by_id.values())
         for user in users:
             user["tracker_progress"].sort(key=lambda item: item["trimester_id"])
@@ -854,6 +883,43 @@ class DashboardService:
             "users": users,
             "generated_at": datetime.utcnow().isoformat(),
         }
+
+    @staticmethod
+    def _merge_lumen_records(db_session, users_by_id: Dict[str, Dict[str, Any]]) -> None:
+        """Attach each student's full Lumen payload, self-reported profile, and ML prediction."""
+        from backend.db import LumenSyncRecord, StudentProfileRecord
+
+        def user_for(student_id: str, email: Optional[str]) -> Dict[str, Any]:
+            user = users_by_id.get(student_id)
+            if user is None:
+                user = {
+                    "id": None,
+                    "student_id": student_id,
+                    "email": email,
+                    "progress": {key: None for key in ADMIN_PROGRESS_KEYS},
+                    "prediction": {"placement_probability": None, "risk_band": None, "actual_placed": None},
+                    "tracker_progress": [],
+                    "tracker_prediction": None,
+                    "updated_at": None,
+                    "created_at": None,
+                }
+                users_by_id[student_id] = user
+            elif email and not user.get("email"):
+                user["email"] = email
+            return user
+
+        for record in db_session.query(LumenSyncRecord).all():
+            user = user_for(record.student_id, record.student_email)
+            insights = _safe_json(record.insights_json)
+            user["lumen"] = _safe_json(record.payload_json)
+            user["ml_prediction"] = insights
+            if insights.get("status") == "ready":
+                user["prediction"]["placement_probability"] = insights.get("placement_probability")
+                user["prediction"]["risk_band"] = insights.get("risk_band")
+
+        for record in db_session.query(StudentProfileRecord).all():
+            user = user_for(record.student_id, record.student_email)
+            user["profile"] = _safe_json(record.profile_json)
 
     @staticmethod
     def _admin_risk_band(placement_probability: Optional[float]) -> Optional[str]:

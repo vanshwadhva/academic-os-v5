@@ -1,0 +1,58 @@
+# Render Blueprint for the Academic OS API.
+# Repository: vanshwadhva/academic-os-v5. Blueprint file path: Academic-OS-Ecosystem/render.yaml
+# Create it with: Render dashboard > New > Blueprint > select the repository, then set the Blueprint file path.
+# Values marked sync: false are secrets or deployment-specific; Render prompts for them.
+
+databases:
+  - name: academic-os-db
+    databaseName: placement_db
+    user: academic_os
+    plan: basic-256mb        # the free Postgres plan expires after 30 days
+    postgresMajorVersion: "16"
+
+services:
+  - type: web
+    name: academic-os-api
+    runtime: docker
+    # The API lives in a subfolder of the git repository (vanshwadhva/academic-os-v5).
+    # Render resolves these paths from the repository root, not from rootDir.
+    rootDir: Academic-OS-Ecosystem
+    dockerfilePath: ./Academic-OS-Ecosystem/Dockerfile
+    dockerContext: ./Academic-OS-Ecosystem
+    plan: starter            # persistent disks require a paid plan
+    region: oregon
+    numInstances: 1          # must stay 1: OAuth state is held in memory
+    healthCheckPath: /health
+    disk:
+      name: lumen-credentials
+      mountPath: /app/runtime
+      sizeGB: 1
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: academic-os-db
+          property: connectionString
+      - key: LUMEN_BASE_URL
+        value: https://lumen.bitspilani-digital.edu.in
+      - key: LUMEN_CLIENT_ID
+        sync: false
+      - key: LUMEN_CLIENT_SECRET
+        sync: false
+      - key: LUMEN_CREDENTIALS_ENCRYPTION_KEY
+        sync: false          # generate once, store safely; losing it disconnects every student
+      - key: LUMEN_REDIRECT_URI
+        sync: false          # https://<this-service>.onrender.com/api/lumen/callback
+      - key: LUMEN_CREDENTIALS_PATH
+        value: /app/runtime/lumen_credentials.json
+      - key: FRONTEND_URL
+        sync: false          # https://bits-dsai-tracker.web.app/index.html (or the extension URL)
+      - key: FIREBASE_PROJECT_ID
+        value: bits-dsai-tracker
+      - key: ADMIN_DASHBOARD_EMAIL
+        value: 2025em1300265@bitspilani-digital.edu.in
+      - key: CORS_ORIGINS
+        value: https://bits-dsai-tracker.web.app,https://bits-dsai-tracker.firebaseapp.com
+      - key: CHROME_EXTENSION_ORIGINS
+        sync: false          # chrome-extension://<id>, only when the extension is used

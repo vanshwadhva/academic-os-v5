@@ -18,3 +18,12 @@ __pycache__
 node_modules
 .DS_Store
 /archive
+# Not needed at runtime
+tests
+extension
+frontend
+docs
+scripts
+data
+*.md
+

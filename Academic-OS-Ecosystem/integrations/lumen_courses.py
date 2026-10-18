@@ -55,24 +55,24 @@ class LumenCourses:
         Raises:
             LumenAPIError: If API call fails
         """
-        # Build endpoint
-        if user_id:
-            endpoint = f"/d2l/api/le/1.55/enrollments/users/{user_id}/orgUnits/"
-        else:
-            endpoint = "/d2l/api/le/1.55/enrollments/myenrollments/"
-        
+        # The student-context endpoint is used for every student sync. The
+        # user-scoped enrollments route is an admin/instructor route and fails
+        # for student tokens, so ``user_id`` is accepted for compatibility only.
+        endpoint = "/d2l/api/le/1.55/enrollments/myenrollments/"
+
         try:
-            params = {}
-            if is_active:
-                params["isActive"] = "true"
-            
             courses_data = self.client.get_paginated(endpoint, page_size=100)
-            
+
             normalized_courses = [
-                self._normalize_course(course) 
+                self._normalize_course(course)
                 for course in courses_data
             ]
-            
+            # Enrollments also list departments and semesters; keep course offerings.
+            normalized_courses = [
+                course for course in normalized_courses
+                if course["course_id"] and course["course_type"] in (None, "", "Course Offering")
+            ]
+
             logger.info(f"Fetched {len(normalized_courses)} enrolled courses")
             return normalized_courses
         
@@ -217,12 +217,17 @@ class LumenCourses:
         Returns:
             Normalized course dictionary
         """
+        # Brightspace's enrollment list nests the org unit under "OrgUnit"
+        # (MyOrgUnitInfo). Flat OrgUnitId/Name/Code shapes are kept as fallbacks.
+        org_unit = course_data.get("OrgUnit") or {}
+        org_unit_type = org_unit.get("Type") or {}
+        raw_id = org_unit.get("Id", course_data.get("OrgUnitId"))
         return {
-            "course_id": course_data.get("OrgUnitId"),
-            "course_code": course_data.get("Code", ""),
-            "course_name": course_data.get("Name", ""),
-            "course_type": course_data.get("Type"),
-            "is_active": course_data.get("IsActive", False),
+            "course_id": str(raw_id) if raw_id is not None else None,
+            "course_code": org_unit.get("Code") or course_data.get("Code") or "",
+            "course_name": org_unit.get("Name") or course_data.get("Name") or "",
+            "course_type": org_unit_type.get("Code") or course_data.get("Type"),
+            "is_active": course_data.get("IsActive", True),
             "start_date": self._parse_datetime(course_data.get("StartDate")),
             "end_date": self._parse_datetime(course_data.get("EndDate")),
             "synced_at": datetime.utcnow().isoformat(),

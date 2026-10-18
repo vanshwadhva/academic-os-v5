@@ -5,15 +5,15 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: placement_db
+      POSTGRES_USER: ${POSTGRES_USER:-academic_os}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-placement_db}
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -25,11 +25,26 @@ services:
       db:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/placement_db
+      DATABASE_URL: postgresql://${POSTGRES_USER:-academic_os}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-placement_db}
+      APP_ENV: production
+      PORT: "8000"
+      LUMEN_BASE_URL: ${LUMEN_BASE_URL:-https://lumen.bitspilani-digital.edu.in}
+      LUMEN_CLIENT_ID: ${LUMEN_CLIENT_ID:?Set LUMEN_CLIENT_ID in .env}
+      LUMEN_CLIENT_SECRET: ${LUMEN_CLIENT_SECRET:?Set LUMEN_CLIENT_SECRET in .env}
+      LUMEN_REDIRECT_URI: ${LUMEN_REDIRECT_URI:?Set LUMEN_REDIRECT_URI in .env (https callback URL)}
+      LUMEN_CREDENTIALS_PATH: /app/runtime/lumen_credentials.json
+      LUMEN_CREDENTIALS_ENCRYPTION_KEY: ${LUMEN_CREDENTIALS_ENCRYPTION_KEY:?Set LUMEN_CREDENTIALS_ENCRYPTION_KEY in .env}
+      FRONTEND_URL: ${FRONTEND_URL:?Set FRONTEND_URL in .env}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      CHROME_EXTENSION_ORIGINS: ${CHROME_EXTENSION_ORIGINS:-}
+      ADMIN_DASHBOARD_EMAIL: ${ADMIN_DASHBOARD_EMAIL:?Set ADMIN_DASHBOARD_EMAIL in .env}
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:?Set FIREBASE_PROJECT_ID in .env}
     ports:
       - "8000:8000"
     volumes:
       - ./model_artifacts:/app/model_artifacts:ro
+      - lumen_credentials:/app/runtime
 
 volumes:
   pgdata:
+  lumen_credentials:

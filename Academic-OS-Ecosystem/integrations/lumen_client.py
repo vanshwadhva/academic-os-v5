@@ -30,6 +30,8 @@ logger = logging.getLogger(__name__)
 
 
 class LumenClient:
+    # Incremented on every successful token refresh; see export_refreshed_tokens().
+    refresh_count: int = 0
     """
     Production-grade Lumen/Brightspace API client.
     
@@ -168,6 +170,17 @@ class LumenClient:
         
         return encrypted_access, encrypted_refresh
 
+    def export_refreshed_tokens(self) -> Optional[Tuple[str, Optional[str], int]]:
+        """
+        Return (access_token, refresh_token, seconds_left) if a refresh happened
+        during this client's lifetime, else None. The caller must persist these:
+        Brightspace may rotate the refresh token on every refresh.
+        """
+        if not self.refresh_count or not self._access_token or not self._token_expires_at:
+            return None
+        seconds_left = max(0, int((self._token_expires_at - datetime.utcnow()).total_seconds()))
+        return self._access_token, self._refresh_token, seconds_left
+
     def is_token_expired(self) -> bool:
         """Check if current token has expired."""
         if not self._token_expires_at:
@@ -220,6 +233,7 @@ class LumenClient:
                 expires_in=data.get("expires_in", 3600),
                 refresh_token=data.get("refresh_token", self._refresh_token),
             )
+            self.refresh_count += 1
             logger.info("Token refreshed successfully")
             return True
         except Exception as e:

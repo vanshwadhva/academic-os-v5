@@ -52,27 +52,16 @@ class LumenModules:
             LumenAPIError: If API call fails
         """
         endpoint = f"/d2l/api/le/1.55/content/orgUnits/{course_id}/toc"
-        
+
         try:
-            modules_data = self.client.get_paginated(endpoint, page_size=100)
-            
-            normalized_modules = [
-                self._normalize_module(module)
-                for module in modules_data
-            ]
-            # The TOC can contain both folders (Type 0) and learner-facing
-            # topics (Type 1). Count the topics as lectures when the tenant
-            # supplies type information; retain legacy/untyped responses.
-            typed_topics = [
-                module for module in normalized_modules
-                if str(module.get("module_type")).lower() in {"1", "topic"}
-            ]
-            if typed_topics:
-                normalized_modules = typed_topics
-            
-            logger.info(f"Fetched {len(normalized_modules)} modules for course {course_id}")
+            # The TOC is a nested tree, not a paged list: Modules contain child
+            # Modules and Topics, and only Topics (TopicId) are learner lectures.
+            toc = self.client.request("GET", endpoint)
+            normalized_modules = self._flatten_toc(toc)
+
+            logger.info(f"Fetched {len(normalized_modules)} lecture topics for course {course_id}")
             return normalized_modules
-        
+
         except Exception as e:
             logger.error(f"Failed to fetch modules for course {course_id}: {str(e)}")
             raise LumenAPIError(f"Failed to fetch course modules: {str(e)}")
@@ -309,6 +298,56 @@ class LumenModules:
             }
         )
         return progress
+
+    def _flatten_toc(self, toc: Any) -> List[Dict[str, Any]]:
+        """
+        Flatten the nested Brightspace TOC into lecture topics.
+
+        Walks ``Modules`` recursively (modules nest modules and topics) and
+        emits one entry per visible topic, keyed by its ``TopicId`` so that
+        per-topic progress can be joined onto it.
+        """
+        if not isinstance(toc, dict):
+            return []
+
+        topics: List[Dict[str, Any]] = []
+
+        def visit(nodes: Any, module_path: List[str]) -> None:
+            for node in nodes or []:
+                if not isinstance(node, dict):
+                    continue
+                title = node.get("Title") or ""
+                for topic in node.get("Topics") or []:
+                    if isinstance(topic, dict) and not topic.get("IsHidden"):
+                        topics.append(self._normalize_topic(topic, module_path + [title] if title else module_path))
+                visit(node.get("Modules"), module_path + [title] if title else module_path)
+
+        visit(toc.get("Modules"), [])
+        # Topics placed directly at the root of the TOC.
+        for topic in toc.get("Topics") or []:
+            if isinstance(topic, dict) and not topic.get("IsHidden"):
+                topics.append(self._normalize_topic(topic, []))
+        return topics
+
+    def _normalize_topic(self, topic: Dict[str, Any], module_path: List[str]) -> Dict[str, Any]:
+        """Normalize one TOC topic (a lecture) into the dict the dashboard consumes."""
+        topic_id = topic.get("TopicId")
+        return {
+            "topic_id": str(topic_id) if topic_id is not None else None,
+            "title": topic.get("Title", ""),
+            "description": topic.get("Description", ""),
+            "module_type": "1",  # topics are learner-facing lectures
+            "module_path": " > ".join(module_path),
+            "available": not topic.get("IsLocked", False),
+            "published": not topic.get("IsHidden", False),
+            "sequence": topic.get("SortOrder"),
+            "parent_topic_id": None,
+            "url": topic.get("Url"),
+            "activity_type": topic.get("ActivityType"),
+            "completion_type": topic.get("CompletionType"),
+            "last_modified": self._parse_datetime(topic.get("LastModifiedDate")),
+            "synced_at": datetime.utcnow().isoformat(),
+        }
 
     def _normalize_module(self, module_data: Dict[str, Any]) -> Dict[str, Any]:
         """
