@@ -66,7 +66,22 @@ Option A, Render (the planned host):
 6. Point `frontend/config.js` `API_URL` at `https://<service-name>.onrender.com`,
    then deploy the web tracker (step 4).
 
+Render settings that must match the repository layout:
+
+- **Root Directory:** blank (the repository root).
+- **Dockerfile Path:** `./Dockerfile`. The Dockerfile is at the repository root and
+  copies `Academic-OS-Ecosystem/` into the image.
+- **Docker Build Context:** `.` (the repository root).
+- **Blueprint file path:** `Academic-OS-Ecosystem/render.yaml` (Blueprint setup only).
+
+If the build reports `open Dockerfile: no such file or directory`, the Dockerfile
+Path or Root Directory is pointing at the wrong place.
+
 Render notes:
+- **The current service is on the free plan, which does not support persistent
+  disks.** Upgrade it to Starter before adding the disk. Without a disk, the Lumen
+  credential file is lost on every restart, and every student has to reconnect Lumen.
+  The free plan also spins the service down when idle, which delays requests.
 - The service runs one instance (`numInstances: 1`). Keep it that way; see the warning below.
 - The 1 GB disk at `/app/runtime` holds the encrypted Lumen credentials. If the
   disk is lost, every student must reconnect Lumen. Keep backups of the

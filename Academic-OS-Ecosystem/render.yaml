@@ -1,5 +1,5 @@
 # Render Blueprint for the Academic OS API.
-# Repository: vanshwadhva/academic-os-v5. Blueprint file path: Academic-OS-Ecosystem/render.yaml
+# Repository: vanshwadhva/academic-os-v5. Blueprint file path: Academic-OS-Ecosystem/render.yaml (Root Directory left blank)
 # Create it with: Render dashboard > New > Blueprint > select the repository, then set the Blueprint file path.
 # Values marked sync: false are secrets or deployment-specific; Render prompts for them.
 
@@ -14,11 +14,8 @@ services:
   - type: web
     name: academic-os-api
     runtime: docker
-    # The API lives in a subfolder of the git repository (vanshwadhva/academic-os-v5).
-    # Render resolves these paths from the repository root, not from rootDir.
-    rootDir: Academic-OS-Ecosystem
-    dockerfilePath: ./Academic-OS-Ecosystem/Dockerfile
-    dockerContext: ./Academic-OS-Ecosystem
+    dockerfilePath: ./Dockerfile   # repository root; the Dockerfile copies Academic-OS-Ecosystem/
+    dockerContext: .
     plan: starter            # persistent disks require a paid plan
     region: oregon
     numInstances: 1          # must stay 1: OAuth state is held in memory
